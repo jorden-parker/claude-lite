@@ -15,6 +15,22 @@ describe("cli help", () => {
     expect(runCli("--help").stdout.toString()).toContain("logs");
   });
 
+  for (const command of ["hook", "ollama", "install", "update", "uninstall", "doctor", "logs"]) {
+    for (const flag of ["--help", "-h"]) {
+      test(`${command} ${flag} prints usage without running`, () => {
+        const result = runCli(command, flag);
+        const stdout = result.stdout.toString();
+        expect(result.exitCode).toBe(0);
+        expect(stdout).toContain(`usage: claude-lite ${command}`);
+        expect(stdout).not.toMatch(/done|failed/);
+      });
+    }
+  }
+
+  test("hook --help lists hook names", () => {
+    expect(runCli("hook", "--help").stdout.toString()).toContain("bash-guard");
+  });
+
   test("unknown command prints usage to stderr and exits 2", () => {
     const result = runCli("bogus");
     expect(result.exitCode).toBe(2);

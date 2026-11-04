@@ -11,6 +11,7 @@ A small TypeScript + Bun take on claude-custom: guard hooks, an Ollama launcher,
     cl uninstall                 # removes only what install added
     cl doctor                    # checks the build, blocks, link and hook config
     cl logs                      # follows hook decisions and the Ollama server log
+    cl <command> --help          # usage for one command
 
 ### Upgrading an older install
 
@@ -42,6 +43,6 @@ Pulls the base model and creates the `-cc` model when missing, then runs `claude
 
 ## Dropped from claude-custom
 
-Console, Go TUIs, model picker, doctor, benches/evals, messages proxy, incidents, lease/fit/ladder, handoff relaunch,
-rule cards, nudges, friction budget, repeat cache, telemetry, Fallow, MCP servers, drafts, Qwen Code, GGUF sizes,
+Console, Go TUIs, model picker, benches/evals, messages proxy, incidents, lease/fit/ladder, handoff relaunch,
+rule cards, nudges, friction budget, repeat cache, telemetry, MCP servers, drafts, Qwen Code, GGUF sizes,
 digest pinning, sync beacon, hook Seatbelt sandbox. Claude Code's own sandbox block stays in the generated settings.
