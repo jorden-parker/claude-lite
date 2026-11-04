@@ -24,6 +24,7 @@ import {
   servers,
   uninstall,
   update,
+  build,
 } from "../src/install.ts";
 import type { Runner } from "../src/ollama/launch.ts";
 
@@ -95,6 +96,16 @@ test("update runs pull, install deps, build, install in order", async () => {
     ["bun", "run", "--cwd", "/lite", "build"],
     ["/lite/dist/claude-lite", "install"],
   ]);
+});
+
+test("build runs the project build in the lite home and returns its code", async () => {
+  const calls: string[][] = [];
+  const code = await build("/u", "/lite", async (argv) => {
+    calls.push(argv);
+    return 3;
+  });
+  expect(code).toBe(3);
+  expect(calls).toEqual([["bun", "run", "--cwd", "/lite", "build"]]);
 });
 
 test("update stops at the first failing step and returns its code", async () => {
@@ -272,6 +283,7 @@ test("servers sets the Ollama server env through launchctl", async () => {
     ["launchctl", "setenv", "OLLAMA_NUM_PARALLEL", "1"],
     ["launchctl", "setenv", "OLLAMA_FLASH_ATTENTION", "1"],
     ["launchctl", "setenv", "OLLAMA_KV_CACHE_TYPE", "q8_0"],
+    ["launchctl", "setenv", "OLLAMA_MAX_LOADED_MODELS", "1"],
   ]);
 });
 

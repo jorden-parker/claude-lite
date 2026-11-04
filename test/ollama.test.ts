@@ -36,7 +36,7 @@ test("existing model skips pull and create", async () => {
   const claude = calls[2];
   expect(claude[0]).toBe("claude");
   expect(claude.slice(-2)).toEqual(["-p", "hi"]);
-  expect(claude[claude.indexOf("--model") + 1]).toBe("qwen3.6-35b-cc");
+  expect(claude[claude.indexOf("--model") + 1]).toBe("qwen3.6-35b-64k-cc");
   expect(envs[2].ANTHROPIC_BASE_URL).toBe("http://localhost:11434");
   expect(envs[2].ANTHROPIC_API_KEY).toBeUndefined();
 });

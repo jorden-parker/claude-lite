@@ -7,6 +7,7 @@ A small TypeScript + Bun take on claude-custom: guard hooks, an Ollama launcher,
     bun install && bun run build
     dist/claude-lite install     # CLAUDE.md @-import, `claude` rc function, ~/.local/bin/cl link (backs up each file)
 
+    cl build                     # compile dist/claude-lite in the lite home
     cl update                    # git pull --ff-only, bun install, build, install
     cl uninstall                 # removes only what install added
     cl doctor                    # checks the build, blocks, link, hook config and Ollama health
@@ -32,6 +33,8 @@ An older binary has no `update` and no `cl`. Run once, then open a new shell; af
 
 Pulls the base model and creates the `-cc` model when missing, then runs `claude` with generated settings,
 `config/system-prompt.md`, thinking disabled and `Agent` denied. Sizes live in `config/sizes.json`.
+
+Needs Ollama ≥ 0.40.12. MLX runs one request at a time, so two sessions on one model take turns; switching sizes reloads the model and clears its prompt cache (`cl servers` sets `OLLAMA_MAX_LOADED_MODELS=1`).
 
 ## Hooks (`claude-lite hook <name>`, wired by `config/hooks.json`)
 

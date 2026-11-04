@@ -142,6 +142,16 @@ export async function uninstall(userHome: string, home: string): Promise<number>
   return 0;
 }
 
+const buildCommand = (home: string) => ["bun", "run", "--cwd", home, "build"];
+
+export async function build(
+  _userHome: string,
+  home: string,
+  run: Runner = spawnRunner,
+): Promise<number> {
+  return await run(buildCommand(home));
+}
+
 export async function update(
   _userHome: string,
   home: string,
@@ -150,7 +160,7 @@ export async function update(
   const steps = [
     ["git", "-C", home, "pull", "--ff-only"],
     ["bun", "install", "--cwd", home],
-    ["bun", "run", "--cwd", home, "build"],
+    buildCommand(home),
     [binaryPath(home), "install"],
   ];
   for (const step of steps) {
@@ -258,6 +268,7 @@ const OLLAMA_SERVER_ENV: [string, string][] = [
   ["OLLAMA_NUM_PARALLEL", "1"],
   ["OLLAMA_FLASH_ATTENTION", "1"],
   ["OLLAMA_KV_CACHE_TYPE", "q8_0"],
+  ["OLLAMA_MAX_LOADED_MODELS", "1"],
 ];
 
 export async function servers(

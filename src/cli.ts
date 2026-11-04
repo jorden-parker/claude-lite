@@ -12,13 +12,24 @@ import {
   settings,
   uninstall,
   update,
+  build,
 } from "./install.ts";
 import { launch } from "./ollama/launch.ts";
 
 const LIFECYCLE: Record<
   Exclude<keyof typeof COMMAND_HELP, "hook" | "ollama">,
   (userHome: string, home: string) => Promise<number>
-> = { install, uninstall, update, doctor, logs, servers, settings, "fix-servers": fixServers };
+> = {
+  install,
+  uninstall,
+  update,
+  build,
+  doctor,
+  logs,
+  servers,
+  settings,
+  "fix-servers": fixServers,
+};
 
 const isHelpFlag = (arg: string | undefined) => arg === "-h" || arg === "--help";
 
