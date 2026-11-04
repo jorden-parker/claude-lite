@@ -6,11 +6,12 @@ import {
   readdirSync,
   readFileSync,
   readlinkSync,
+  renameSync,
   symlinkSync,
   unlinkSync,
   writeFileSync,
 } from "node:fs";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { HOOK_NAMES, hookLogPath } from "./hooks/run-hook.ts";
 import { type Runner, serverResponds, spawnRunner } from "./ollama/launch.ts";
 
@@ -222,6 +223,44 @@ export async function servers(
   console.log(`${responds ? "ok  " : "FAIL"} server responds`);
   const oneSource = sources.length <= 1;
   if (!oneSource)
-    console.log("FAIL more than one Ollama startup source; they fight over port 11434. Keep one.");
+    console.log(
+      "FAIL more than one Ollama startup source; they fight over port 11434. Run cl fix-servers.",
+    );
   return responds && oneSource ? 0 : 1;
+}
+
+function trashPath(userHome: string, file: string): string {
+  const trashed = join(userHome, ".Trash", basename(file));
+  return existsSync(trashed) ? `${trashed}.${Date.now()}` : trashed;
+}
+
+async function retireUserAgent(userHome: string, plist: string, run: Runner): Promise<void> {
+  await run(["launchctl", "bootout", `gui/${process.getuid?.()}`, plist]);
+  mkdirSync(join(userHome, ".Trash"), { recursive: true });
+  renameSync(plist, trashPath(userHome, plist));
+  console.log(`removed ${plist} (in ~/.Trash)`);
+}
+
+export async function fixServers(
+  userHome: string,
+  _home: string,
+  run: Runner = spawnRunner,
+  systemRoot = "/",
+): Promise<number> {
+  if (ollamaStartupSources(userHome, systemRoot).length <= 1) {
+    console.log("ok   one Ollama startup source");
+    return 0;
+  }
+  if (!ollamaApps(userHome, systemRoot).length) {
+    console.log("FAIL no Ollama.app to keep; remove all but one source by hand");
+    return 1;
+  }
+  const userAgentDir = join(userHome, "Library/LaunchAgents");
+  const plists = allOllamaPlists(userHome, systemRoot);
+  const userAgents = plists.filter((plist) => dirname(plist) === userAgentDir);
+  const needSudo = plists.filter((plist) => !userAgents.includes(plist));
+  for (const plist of userAgents) await retireUserAgent(userHome, plist, run);
+  for (const plist of needSudo) console.log(`FAIL needs sudo: ${plist}`);
+  await run(["open", "-a", "Ollama"]);
+  return needSudo.length ? 1 : 0;
 }

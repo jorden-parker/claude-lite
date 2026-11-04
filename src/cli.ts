@@ -2,13 +2,13 @@
 import { homedir } from "node:os";
 import { liteHome } from "./home.ts";
 import { HOOK_NAMES, runHook } from "./hooks/run-hook.ts";
-import { doctor, install, logs, servers, uninstall, update } from "./install.ts";
+import { doctor, fixServers, install, logs, servers, uninstall, update } from "./install.ts";
 import { launch } from "./ollama/launch.ts";
 
-const LIFECYCLE = { install, uninstall, update, doctor, logs, servers };
+const LIFECYCLE = { install, uninstall, update, doctor, logs, servers, "fix-servers": fixServers };
 
 const USAGE =
-  "usage: claude-lite hook <name> | ollama [27b|35b] [--print-config] [claude args] | install | update | uninstall | doctor | logs | servers";
+  "usage: claude-lite hook <name> | ollama [27b|35b] [--print-config] [claude args] | install | update | uninstall | doctor | logs | servers | fix-servers";
 
 const COMMAND_HELP: Record<string, string> = {
   hook: `usage: claude-lite hook <name>\n  runs one guard hook on the event in stdin; names: ${HOOK_NAMES.join(", ")}`,
@@ -23,6 +23,8 @@ const COMMAND_HELP: Record<string, string> = {
   logs: "usage: claude-lite logs\n  follows hook decisions and the Ollama logs named in its launchd plists and Ollama.app",
   servers:
     "usage: claude-lite servers\n  lists Ollama startup sources and the port 11434 listener; fails when more than one source would start a server or the server does not respond",
+  "fix-servers":
+    "usage: claude-lite fix-servers\n  keeps Ollama.app: boots out and moves Ollama LaunchAgents in ~/Library/LaunchAgents to ~/.Trash, then opens Ollama; reports plists that need sudo",
 };
 
 const isHelpFlag = (arg: string | undefined) => arg === "-h" || arg === "--help";

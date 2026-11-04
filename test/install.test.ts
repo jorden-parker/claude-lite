@@ -15,6 +15,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   doctor,
+  fixServers,
   install,
   logs,
   ollamaLogPaths,
@@ -270,4 +271,73 @@ test("servers fails with two startup sources", async () => {
   touch(join(user, "Library/LaunchAgents/local.ollama.plist"));
   mkdirSync(join(system, "Applications/Ollama.app"), { recursive: true });
   expect(await servers(user, "/lite", async () => 0, system)).toBe(1);
+});
+
+const recordingRunner = () => {
+  const seen: string[][] = [];
+  const run: Runner = async (argv) => {
+    seen.push(argv);
+    return 0;
+  };
+  return { seen, run };
+};
+
+const userAgent = (user: string) => join(user, "Library/LaunchAgents/local.ollama.plist");
+const addApp = (system: string) =>
+  mkdirSync(join(system, "Applications/Ollama.app"), { recursive: true });
+
+test("fixServers does nothing with one startup source", async () => {
+  const { user, system } = ollamaRoots();
+  addApp(system);
+  const { seen, run } = recordingRunner();
+  expect(await fixServers(user, "/lite", run, system)).toBe(0);
+  expect(seen).toEqual([]);
+});
+
+test("fixServers boots out and trashes the user agent, then opens Ollama.app", async () => {
+  const { user, system } = ollamaRoots();
+  touch(userAgent(user));
+  addApp(system);
+  const { seen, run } = recordingRunner();
+  expect(await fixServers(user, "/lite", run, system)).toBe(0);
+  expect(seen).toEqual([
+    ["launchctl", "bootout", `gui/${process.getuid?.()}`, userAgent(user)],
+    ["open", "-a", "Ollama"],
+  ]);
+  expect(existsSync(join(user, ".Trash/local.ollama.plist"))).toBe(true);
+  expect(ollamaStartupSources(user, system)).toHaveLength(1);
+});
+
+test("fixServers keeps the agent when there is no Ollama.app", async () => {
+  const { user, system } = ollamaRoots();
+  touch(userAgent(user));
+  touch(join(user, "Library/LaunchAgents/homebrew.mxcl.ollama.plist"));
+  expect(await fixServers(user, "/lite", async () => 0, system)).toBe(1);
+  expect(existsSync(userAgent(user))).toBe(true);
+});
+
+test("fixServers reports system plists as needing sudo", async () => {
+  const { user, system } = ollamaRoots();
+  touch(join(system, "Library/LaunchDaemons/Ollama.plist"));
+  addApp(system);
+  const lines: string[] = [];
+  const originalLog = console.log;
+  console.log = (line: string) => lines.push(line);
+  try {
+    expect(await fixServers(user, "/lite", async () => 0, system)).toBe(1);
+  } finally {
+    console.log = originalLog;
+  }
+  expect(lines.some((line) => line.includes("needs sudo"))).toBe(true);
+});
+
+test("fixServers adds a timestamp when the trash already has that name", async () => {
+  const { user, system } = ollamaRoots();
+  touch(userAgent(user));
+  touch(join(user, ".Trash/local.ollama.plist"));
+  addApp(system);
+  expect(await fixServers(user, "/lite", async () => 0, system)).toBe(0);
+  const trashed = readdirSync(join(user, ".Trash"));
+  expect(trashed).toHaveLength(2);
+  expect(trashed.some((name) => /^local\.ollama\.plist\.\d+$/.test(name))).toBe(true);
 });
