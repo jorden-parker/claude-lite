@@ -1,4 +1,9 @@
-const MARKERS: Record<string, string[]> = { go: ["//", "/*"], js: ["//", "/*"], python: ["#"], shell: ["#"] };
+const MARKERS: Record<string, string[]> = {
+  go: ["//", "/*"],
+  js: ["//", "/*"],
+  python: ["#"],
+  shell: ["#"],
+};
 const ALLOWED = ["#!", "//go:", "/// <reference"];
 const QUOTES = "'\"`";
 

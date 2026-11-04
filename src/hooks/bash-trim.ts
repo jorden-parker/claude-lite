@@ -17,7 +17,9 @@ const clip = (line: string) =>
 function trimLines(lines: string[]): string[] {
   if (lines.length <= MAX_LINES) return lines;
   const middle = lines.slice(HEAD_LINES, -TAIL_LINES);
-  const signals = middle.filter((line) => SIGNAL.test(line) || SUMMARY.test(line)).slice(0, MAX_SIGNAL_LINES);
+  const signals = middle
+    .filter((line) => SIGNAL.test(line) || SUMMARY.test(line))
+    .slice(0, MAX_SIGNAL_LINES);
   const marker = `[bash-trim: ${middle.length - signals.length} lines hidden from lines ${HEAD_LINES + 1}-${lines.length - TAIL_LINES}; rerun piped through grep or sed -n to see them]`;
   return [...lines.slice(0, HEAD_LINES), ...signals, marker, ...lines.slice(-TAIL_LINES)];
 }
@@ -32,5 +34,7 @@ export function decide(event: HookEvent): HookResult {
     if (typeof response[stream] === "string") trimmed[stream] = trimText(response[stream]);
   }
   if (JSON.stringify(trimmed) === JSON.stringify(response)) return null;
-  return { output: { hookSpecificOutput: { hookEventName: "PostToolUse", updatedToolOutput: trimmed } } };
+  return {
+    output: { hookSpecificOutput: { hookEventName: "PostToolUse", updatedToolOutput: trimmed } },
+  };
 }

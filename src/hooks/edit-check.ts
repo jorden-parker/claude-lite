@@ -40,9 +40,13 @@ function checksFor(path: string, language: string): { command: string[]; cwd: st
 }
 
 function committedText(path: string): string {
-  const result = spawnSync("git", ["-C", dirname(path), "show", `HEAD:./${path.split("/").pop()}`], {
-    encoding: "utf8",
-  });
+  const result = spawnSync(
+    "git",
+    ["-C", dirname(path), "show", `HEAD:./${path.split("/").pop()}`],
+    {
+      encoding: "utf8",
+    },
+  );
   return result.status === 0 ? result.stdout : "";
 }
 
@@ -58,7 +62,8 @@ export function decide(
   available: (tool: string) => boolean = onPath,
 ): HookResult {
   const input = event.tool_input ?? {};
-  if (!["Edit", "Write", "MultiEdit"].includes(event.tool_name ?? "") || !input.file_path) return null;
+  if (!["Edit", "Write", "MultiEdit"].includes(event.tool_name ?? "") || !input.file_path)
+    return null;
   const path = resolve(event.cwd ?? ".", input.file_path);
   const language = EXTENSION_LANGUAGES[extname(path)];
   if (!language || !existsSync(path)) return null;
@@ -75,7 +80,9 @@ export function decide(
     if (!tool.includes("/") && !available(tool)) continue;
     const result = run(check.command, check.cwd);
     if (result && (!result.ok || (tool === "gofmt" && result.output.trim() !== ""))) {
-      problems.push(`${tool.split("/").pop()} failed:\n${result.output.split("\n").slice(0, 40).join("\n")}`);
+      problems.push(
+        `${tool.split("/").pop()} failed:\n${result.output.split("\n").slice(0, 40).join("\n")}`,
+      );
     }
   }
   return problems.length ? { exitCode: 2, stderr: problems.join("\n\n") } : null;

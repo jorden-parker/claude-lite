@@ -17,6 +17,7 @@ export function loadSizes(home: string): Record<string, Size> {
 
 export function pickSize(sizes: Record<string, Size>, name: string): Size {
   const size = sizes[name];
-  if (!size) throw new Error(`unknown size ${name}; choose one of ${Object.keys(sizes).join(", ")}`);
+  if (!size)
+    throw new Error(`unknown size ${name}; choose one of ${Object.keys(sizes).join(", ")}`);
   return size;
 }

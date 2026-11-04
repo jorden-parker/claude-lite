@@ -4,10 +4,7 @@
   "skillListingMaxDescChars": 300,
   "sandbox": {
     "enabled": true,
-    "excludedCommands": [
-      "gh *",
-      "git push *"
-    ],
+    "excludedCommands": ["gh *", "git push *"],
     "network": {
       "allowedDomains": [
         "127.0.0.1",
@@ -25,9 +22,7 @@
       "allowLocalBinding": true
     },
     "filesystem": {
-      "allowWrite": [
-        "~/.cache/claude-sandbox"
-      ],
+      "allowWrite": ["~/.cache/claude-sandbox"],
       "denyRead": [
         "~/.ssh",
         "~/.aws",
@@ -90,11 +85,7 @@
       "ShareOnboardingGuide",
       "Workflow"
     ],
-    "ask": [
-      "Bash(dangerouslyDisableSandbox:true)",
-      "Bash(gh *)",
-      "Bash(git push *)"
-    ]
+    "ask": ["Bash(dangerouslyDisableSandbox:true)", "Bash(gh *)", "Bash(git push *)"]
   },
   "hooks": {
     "PreToolUse": [

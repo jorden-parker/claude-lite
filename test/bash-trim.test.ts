@@ -10,7 +10,9 @@ const run = (stdout: string) =>
 test("short output untouched", () => expect(run("a\nb")).toBeNull());
 
 test("long output keeps head, tail, errors and Bash shape", () => {
-  const lines = Array.from({ length: 400 }, (_, i) => (i === 200 ? "boom error here" : `line ${i}`));
+  const lines = Array.from({ length: 400 }, (_, i) =>
+    i === 200 ? "boom error here" : `line ${i}`,
+  );
   const out = run(lines.join("\n")).output.hookSpecificOutput.updatedToolOutput;
   expect(Object.keys(out)).toEqual(["stdout", "stderr", "interrupted", "isImage"]);
   expect(out.stdout).toContain("line 0");

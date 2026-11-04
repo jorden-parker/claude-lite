@@ -1,4 +1,0 @@
-{
-  "formatter": { "indentStyle": "space", "lineWidth": 110 },
-  "files": { "includes": ["src/**", "test/**", "*.json"] }
-}

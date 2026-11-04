@@ -23,7 +23,9 @@ test("modelfile has base and parameters", () => {
     output_tokens: 10,
     parameters: { top_k: 20 },
   });
-  expect(text).toBe("FROM b\nPARAMETER num_ctx 100\nPARAMETER num_predict 10\nPARAMETER top_k 20\n");
+  expect(text).toBe(
+    "FROM b\nPARAMETER num_ctx 100\nPARAMETER num_predict 10\nPARAMETER top_k 20\n",
+  );
 });
 
 test("existing model skips pull and create", async () => {

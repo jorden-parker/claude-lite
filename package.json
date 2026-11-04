@@ -1,18 +1,26 @@
 {
   "name": "claude-lite",
   "version": "0.1.0",
-  "type": "module",
   "bin": {
     "claude-lite": "src/cli.ts"
   },
+  "type": "module",
   "scripts": {
     "test": "bun test",
     "build": "bun build --compile src/cli.ts --outfile dist/claude-lite",
-    "lint": "biome check ."
+    "lint": "oxlint . && oxfmt --check .",
+    "prepare": "husky",
+    "format": "oxfmt .",
+    "typecheck": "tsc"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.0.0",
+    "@commitlint/cli": "^21.2.4",
+    "@commitlint/config-conventional": "^21.2.4",
     "@types/bun": "latest",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.6.0",
+    "oxfmt": "^0.76.0",
+    "oxlint": "^1.91.0",
     "typescript": "^5.0.0"
   }
 }

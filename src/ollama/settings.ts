@@ -15,7 +15,10 @@ export function renderSettings(base: Record<string, any>, hooks: unknown, size: 
       CLAUDE_CODE_MAX_OUTPUT_TOKENS: String(size.output_tokens),
       CLAUDE_CODE_EXTRA_BODY: JSON.stringify({ thinking: { type: "disabled" } }),
     },
-    permissions: { ...base.permissions, deny: [...new Set([...(base.permissions?.deny ?? []), "Agent"])] },
+    permissions: {
+      ...base.permissions,
+      deny: [...new Set([...(base.permissions?.deny ?? []), "Agent"])],
+    },
     hooks,
   };
 }

@@ -65,11 +65,7 @@
     ],
     "defaultMode": "default",
     "disableAutoMode": "disable",
-    "ask": [
-      "Bash(git commit *)",
-      "Bash(git push *)",
-      "Bash(dangerouslyDisableSandbox:true)"
-    ],
+    "ask": ["Bash(git commit *)", "Bash(git push *)", "Bash(dangerouslyDisableSandbox:true)"],
     "allow": [
       "mcp__code-search__semantic_search",
       "mcp__repo",
@@ -86,14 +82,7 @@
   "sandbox": {
     "enabled": true,
     "autoAllowBashIfSandboxed": true,
-    "excludedCommands": [
-      "cmux *",
-      "gh *",
-      "short *",
-      "git push *",
-      "git commit *",
-      "pnpm *"
-    ],
+    "excludedCommands": ["cmux *", "gh *", "short *", "git push *", "git commit *", "pnpm *"],
     "network": {
       "allowedDomains": [
         "127.0.0.1",
@@ -111,9 +100,7 @@
       "allowLocalBinding": true
     },
     "filesystem": {
-      "allowWrite": [
-        "~/.cache/claude-sandbox"
-      ],
+      "allowWrite": ["~/.cache/claude-sandbox"],
       "denyRead": [
         "~/.ssh",
         "~/.aws",

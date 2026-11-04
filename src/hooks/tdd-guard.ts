@@ -4,7 +4,19 @@ import { basename, dirname, extname, join, resolve, sep } from "node:path";
 import { deny, type HookEvent, type HookResult } from "./types.ts";
 
 const EDIT_TOOLS = ["Edit", "Write", "MultiEdit"];
-const CODE_SUFFIXES = [".go", ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".py", ".sh", ".bash", ".zsh"];
+const CODE_SUFFIXES = [
+  ".go",
+  ".ts",
+  ".tsx",
+  ".js",
+  ".jsx",
+  ".mjs",
+  ".cjs",
+  ".py",
+  ".sh",
+  ".bash",
+  ".zsh",
+];
 const PACKAGE_SUFFIXES = [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"];
 const TEST_NAME = /(^|[._-])(test|tests|spec)([._-]|$)/i;
 const CONFIG_NAME = /(\.config\.[a-z]+|^\.[a-z0-9-]+rc(\.[a-z]+)?)$/i;
@@ -19,14 +31,20 @@ export type TddState = {
   testRunAt: number;
   strikes: Record<string, number>;
 };
-export const emptyState = (): TddState => ({ counter: 0, testEdits: {}, testRunAt: 0, strikes: {} });
+export const emptyState = (): TddState => ({
+  counter: 0,
+  testEdits: {},
+  testRunAt: 0,
+  strikes: {},
+});
 
 const isTest = (path: string) => TEST_NAME.test(basename(path));
 const inTestDir = (path: string) =>
   dirname(path)
     .split(sep)
     .some((part) => TEST_DIRS.includes(part));
-const isCode = (path: string) => CODE_SUFFIXES.includes(extname(path)) && !CONFIG_NAME.test(basename(path));
+const isCode = (path: string) =>
+  CODE_SUFFIXES.includes(extname(path)) && !CONFIG_NAME.test(basename(path));
 
 function scopeOf(path: string): string {
   if (!PACKAGE_SUFFIXES.includes(extname(path))) return dirname(path);

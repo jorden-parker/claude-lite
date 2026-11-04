@@ -11,6 +11,10 @@ export type HookResult = { output?: unknown; exitCode?: number; stderr?: string 
 
 export const deny = (reason: string, hookEventName = "PreToolUse"): HookResult => ({
   output: {
-    hookSpecificOutput: { hookEventName, permissionDecision: "deny", permissionDecisionReason: reason },
+    hookSpecificOutput: {
+      hookEventName,
+      permissionDecision: "deny",
+      permissionDecisionReason: reason,
+    },
   },
 });

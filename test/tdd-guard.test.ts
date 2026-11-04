@@ -16,7 +16,8 @@ const bash = (command: string) => ({
 });
 const isDeny = (r: any) => r?.output?.hookSpecificOutput?.permissionDecision === "deny";
 
-test("denies code before a test", () => expect(isDeny(decide(pre("/p/a.go"), emptyState()))).toBe(true));
+test("denies code before a test", () =>
+  expect(isDeny(decide(pre("/p/a.go"), emptyState()))).toBe(true));
 
 test("allows tests, configs and non-code", () => {
   const state = emptyState();

@@ -26,7 +26,11 @@ const unbounded = (command: string, boundingFlags: string[]) =>
 
 const RULES: [RegExp, string][] = [
   [
-    unbounded(`git\\s+${GIT_OPTIONS}log`, [String.raw`\s-n\s*\d`, String.raw`\s-\d+`, "--max-count"]),
+    unbounded(`git\\s+${GIT_OPTIONS}log`, [
+      String.raw`\s-n\s*\d`,
+      String.raw`\s-\d+`,
+      "--max-count",
+    ]),
     "Unbounded git log. Use: git log --oneline -n 20",
   ],
   [
@@ -37,7 +41,10 @@ const RULES: [RegExp, string][] = [
     ]),
     "Unbounded git diff. Use --stat or --name-only first, or add | head -50",
   ],
-  [unbounded("find", [String.raw`-maxdepth`]), "Unbounded find. Add -maxdepth N or | head -50, or use Glob."],
+  [
+    unbounded("find", [String.raw`-maxdepth`]),
+    "Unbounded find. Add -maxdepth N or | head -50, or use Glob.",
+  ],
   [
     new RegExp(
       `${COMMAND_START}(?:cat|less|more|bat)\\s${SEGMENT_BODY}\\b(?:${LOCKFILES.map((n) => n.replace(/\./g, "\\.")).join("|")})\\b${NOT_BOUNDED}`,

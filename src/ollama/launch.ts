@@ -8,7 +8,8 @@ import { DEFAULT_SIZE, loadSizes, pickSize } from "./sizes.ts";
 export type Runner = (argv: string[], env?: Record<string, string | undefined>) => Promise<number>;
 
 export const spawnRunner: Runner = async (argv, env) =>
-  await Bun.spawn(argv, { stdio: ["inherit", "inherit", "inherit"], env: env ?? process.env }).exited;
+  await Bun.spawn(argv, { stdio: ["inherit", "inherit", "inherit"], env: env ?? process.env })
+    .exited;
 
 const TOOLS = "Bash,Read,Edit,Write,Skill";
 
@@ -23,7 +24,11 @@ export function buildPlan(home: string, args: string[]) {
   return { size, settings, modelfile: renderModelfile(size), claudeArgs };
 }
 
-export async function launch(home: string, args: string[], run: Runner = spawnRunner): Promise<number> {
+export async function launch(
+  home: string,
+  args: string[],
+  run: Runner = spawnRunner,
+): Promise<number> {
   if (args.includes("--print-config")) {
     const { settings, modelfile } = buildPlan(
       home,
