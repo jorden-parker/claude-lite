@@ -375,6 +375,7 @@ test("install writes completion files and load lines for present shells", async 
   }
   const zshrc = readFileSync(join(user, ".zshrc"), "utf8");
   expect(zshrc).toContain("fpath+=(");
+  expect(zshrc).toContain("(( $+functions[compdef] )) || { autoload -Uz compinit; compinit; }");
   expect(zshrc).toContain("compdef _cl cl");
   expect(countOf(zshrc, START)).toBe(1);
   const bashrc = readFileSync(join(user, ".bashrc"), "utf8");
