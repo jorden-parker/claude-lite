@@ -22,6 +22,6 @@ export function decide(event: HookEvent): HookResult {
   const lines = lineCount(input.file_path ?? "");
   if (lines <= MAX_LINES) return null;
   return deny(
-    `${input.file_path} has ${lines} lines. Grep for the lines you need first, then Read again with offset and limit (limit ${MAX_LINES} or less).`,
+    `${input.file_path} has ${lines} lines. git grep -n for the lines you need first, then Read again with offset and limit (limit ${MAX_LINES} or less).`,
   );
 }

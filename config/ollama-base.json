@@ -2,7 +2,7 @@
   "apiKeyHelper": "",
   "disableClaudeAiConnectors": true,
   "disableBundledSkills": true,
-  "skillListingBudgetFraction": 0.06,
+  "skillListingBudgetFraction": 0.02,
   "precomputeCompactionEnabled": false,
   "autoMemoryEnabled": false,
   "includeGitInstructions": false,
@@ -66,18 +66,7 @@
     "defaultMode": "default",
     "disableAutoMode": "disable",
     "ask": ["Bash(git commit *)", "Bash(git push *)", "Bash(dangerouslyDisableSandbox:true)"],
-    "allow": [
-      "mcp__code-search__semantic_search",
-      "mcp__repo",
-      "mcp__dev__dev_status",
-      "mcp__dev__dev_logs",
-      "mcp__dev__dev_errors",
-      "mcp__dev__dev_deps",
-      "mcp__dev__page_check",
-      "mcp__dev__page_snapshot",
-      "mcp__dev__page_act",
-      "Skill(find-docs)"
-    ]
+    "allow": ["Skill(find-docs)"]
   },
   "sandbox": {
     "enabled": true,

@@ -26,3 +26,8 @@ test.each([
   "git status",
   "cat src/a.ts",
 ])("allows %s", (command) => expect(denied(command)).toBe(false));
+
+test("denial messages never point at the denied Glob or Grep tools", () => {
+  const result = decide({ tool_input: { command: "find . -name '*.ts'" } });
+  expect(JSON.stringify(result)).not.toMatch(/Glob|Grep/);
+});

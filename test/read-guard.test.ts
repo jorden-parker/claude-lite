@@ -20,3 +20,5 @@ test("allows a 300-line file", () =>
   expect(decide({ tool_input: { file_path: small } })).toBeNull());
 test("allows a missing file", () =>
   expect(decide({ tool_input: { file_path: join(dir, "no") } })).toBeNull());
+test("denial message never points at the denied Grep tool", () =>
+  expect(JSON.stringify(decide({ tool_input: { file_path: big } }))).not.toMatch(/Glob|Grep/));

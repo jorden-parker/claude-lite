@@ -41,10 +41,7 @@ const RULES: [RegExp, string][] = [
     ]),
     "Unbounded git diff. Use --stat or --name-only first, or add | head -50",
   ],
-  [
-    unbounded("find", [String.raw`-maxdepth`]),
-    "Unbounded find. Add -maxdepth N or | head -50, or use Glob.",
-  ],
+  [unbounded("find", [String.raw`-maxdepth`]), "Unbounded find. Add -maxdepth N or | head -50."],
   [
     new RegExp(
       `${COMMAND_START}(?:cat|less|more|bat)\\s${SEGMENT_BODY}\\b(?:${LOCKFILES.map((n) => n.replace(/\./g, "\\.")).join("|")})\\b${NOT_BOUNDED}`,
