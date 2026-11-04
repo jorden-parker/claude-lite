@@ -35,7 +35,7 @@
   },
   "permissions": {
     "deny": [
-      "Read(**/dist/**)",
+      "Read(./dist/**)",
       "Read(**/.next/**)",
       "Read(**/coverage/**)",
       "Read(**/*.min.js)",

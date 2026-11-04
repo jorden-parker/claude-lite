@@ -59,6 +59,14 @@ test("personal settings carry the same hooks as hooks.json", async () => {
   expect((await read("personal-settings.json")).hooks).toEqual(await read("hooks.json"));
 });
 
+test("settings deny only the project's own dist, not node_modules docs", async () => {
+  for (const name of ["personal-settings.json", "ollama-base.json"]) {
+    const { deny } = (await Bun.file(join(home, "config", name)).json()).permissions;
+    expect(deny).not.toContain("Read(**/dist/**)");
+    expect(deny).toContain("Read(./dist/**)");
+  }
+});
+
 test("launch plan helpers stay internal to the launcher", async () => {
   expect(Object.keys(await import("../src/ollama/launch.ts"))).not.toContain("buildPlan");
 });
