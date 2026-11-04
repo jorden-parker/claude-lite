@@ -3,8 +3,8 @@ import { join } from "node:path";
 export type Shell = "zsh" | "bash" | "fish";
 export type CompletionWords = { commands: string[]; hooks: string[]; sizes: string[] };
 
-const START = "# >>> claude-lite >>>";
-const END = "# <<< claude-lite <<<";
+export const START = "# >>> claude-lite >>>";
+export const END = "# <<< claude-lite <<<";
 
 const list = (items: string[]) => items.join(" ");
 

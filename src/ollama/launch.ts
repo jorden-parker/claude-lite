@@ -28,8 +28,9 @@ export const serverResponds = async (run: Runner) =>
 function buildPlan(home: string, args: string[]) {
   const sizes = loadSizes(home);
   const [first, ...rest] = args;
-  const sizeName = first && sizes[first] ? first : DEFAULT_SIZE;
-  const claudeArgs = first && sizes[first] ? rest : args;
+  const isSize = first !== undefined && Object.hasOwn(sizes, first);
+  const sizeName = isSize ? first : DEFAULT_SIZE;
+  const claudeArgs = isSize ? rest : args;
   const size = pickSize(sizes, sizeName);
   const read = (name: string) => JSON.parse(readFileSync(join(home, "config", name), "utf8"));
   const settings = renderSettings(read("ollama-base.json"), read("hooks.json"), size);

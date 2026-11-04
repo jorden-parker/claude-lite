@@ -29,13 +29,13 @@ async function main(argv: string[]): Promise<number> {
     console.log(USAGE);
     return 0;
   }
-  if (command && command in COMMAND_HELP && isHelpFlag(rest[0])) {
+  if (command && Object.hasOwn(COMMAND_HELP, command) && isHelpFlag(rest[0])) {
     console.log(COMMAND_HELP[command as keyof typeof COMMAND_HELP]);
     return 0;
   }
   if (command === "hook" && rest[0]) return await runHook(rest[0]);
   if (command === "ollama") return await launch(home, rest);
-  if (command && command in LIFECYCLE) {
+  if (command && Object.hasOwn(LIFECYCLE, command)) {
     const name = command as keyof typeof LIFECYCLE;
     const code = await LIFECYCLE[name](process.env.HOME ?? homedir(), home);
     if (name === "settings") return code;

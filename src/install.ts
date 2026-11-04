@@ -12,14 +12,12 @@ import {
   writeFileSync,
 } from "node:fs";
 import { basename, dirname, join } from "node:path";
-import { completionPath, completionScript, type Shell } from "./completion.ts";
+import { completionPath, completionScript, END, type Shell, START } from "./completion.ts";
 import { COMMAND_HELP } from "./help.ts";
 import { HOOK_NAMES, hookLogPath } from "./hooks/run-hook.ts";
 import { type Runner, serverResponds, spawnRunner } from "./ollama/launch.ts";
 import { loadSizes } from "./ollama/sizes.ts";
 
-const START = "# >>> claude-lite >>>";
-const END = "# <<< claude-lite <<<";
 const BLOCK = new RegExp(`\\n?${START}[\\s\\S]*?${END}\\n?`);
 
 const claudeMdBlock = (home: string) =>
@@ -33,21 +31,25 @@ const bashBlock = (userHome: string, home: string) =>
 const fishBlock = (home: string) =>
   `${START}\nfunction claude\n  env CLAUDE_LITE_HOME="${home}" command claude --settings ("${home}/dist/claude-lite" settings) $argv\nend\n${END}\n`;
 
-function targets(userHome: string, home: string): [string, string][] {
-  const claudeMd = join(userHome, ".claude", "CLAUDE.md");
-  const rcs: [string, string][] = [
-    [join(userHome, ".zshrc"), zshBlock(userHome, home)],
-    [join(userHome, ".bashrc"), bashBlock(userHome, home)],
-    [join(userHome, ".config", "fish", "config.fish"), fishBlock(home)],
-  ];
-  return [[claudeMd, claudeMdBlock(home)], ...rcs.filter(([path]) => existsSync(path))];
-}
-
 const SHELL_RCS: [Shell, string[]][] = [
   ["zsh", [".zshrc"]],
   ["bash", [".bashrc"]],
   ["fish", [".config", "fish", "config.fish"]],
 ];
+
+function targets(userHome: string, home: string): [string, string][] {
+  const claudeMd = join(userHome, ".claude", "CLAUDE.md");
+  const blocks: Record<Shell, string> = {
+    zsh: zshBlock(userHome, home),
+    bash: bashBlock(userHome, home),
+    fish: fishBlock(home),
+  };
+  const rcs = SHELL_RCS.map(([shell, rc]): [string, string] => [
+    join(userHome, ...rc),
+    blocks[shell],
+  ]);
+  return [[claudeMd, claudeMdBlock(home)], ...rcs.filter(([path]) => existsSync(path))];
+}
 
 const presentShells = (userHome: string) =>
   SHELL_RCS.filter(([, rc]) => existsSync(join(userHome, ...rc))).map(([shell]) => shell);
