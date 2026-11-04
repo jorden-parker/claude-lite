@@ -8,6 +8,7 @@ import {
   readdirSync,
   readFileSync,
   readlinkSync,
+  rmSync,
   symlinkSync,
   writeFileSync,
 } from "node:fs";
@@ -340,4 +341,61 @@ test("fixServers adds a timestamp when the trash already has that name", async (
   const trashed = readdirSync(join(user, ".Trash"));
   expect(trashed).toHaveLength(2);
   expect(trashed.some((name) => /^local\.ollama\.plist\.\d+$/.test(name))).toBe(true);
+});
+
+const START = "# >>> claude-lite >>>";
+const END = "# <<< claude-lite <<<";
+const completionFiles = (user: string) => ({
+  zsh: join(user, ".local", "share", "zsh", "site-functions", "_cl"),
+  bash: join(user, ".local", "share", "bash-completion", "completions", "cl"),
+  fish: join(user, ".config", "fish", "completions", "cl.fish"),
+});
+const countOf = (text: string, needle: string) => text.split(needle).length - 1;
+
+async function completionHome() {
+  const user = fixture();
+  writeFileSync(join(user, ".bashrc"), "");
+  mkdirSync(join(user, ".config", "fish"), { recursive: true });
+  writeFileSync(join(user, ".config", "fish", "config.fish"), "");
+  const home = mkdtempSync(join(tmpdir(), "lite-"));
+  cpSync(join(import.meta.dir, "..", "config"), join(home, "config"), { recursive: true });
+  return { user, home };
+}
+
+test("install writes completion files and load lines for present shells", async () => {
+  const { user, home } = await completionHome();
+  await install(user, home);
+  await install(user, home);
+  const files = completionFiles(user);
+  for (const path of Object.values(files)) {
+    const text = readFileSync(path, "utf8");
+    expect(countOf(text, START)).toBe(1);
+    expect(countOf(text, END)).toBe(1);
+    expect(text).toContain("27b");
+  }
+  const zshrc = readFileSync(join(user, ".zshrc"), "utf8");
+  expect(zshrc).toContain("fpath+=(");
+  expect(zshrc).toContain("compdef _cl cl");
+  expect(countOf(zshrc, START)).toBe(1);
+  const bashrc = readFileSync(join(user, ".bashrc"), "utf8");
+  expect(bashrc).toContain(`. ${files.bash}`);
+  expect(countOf(bashrc, START)).toBe(1);
+});
+
+test("install skips the fish file without config.fish", async () => {
+  const { user, home } = await completionHome();
+  rmSync(join(user, ".config", "fish", "config.fish"));
+  await install(user, home);
+  expect(existsSync(completionFiles(user).fish)).toBe(false);
+  expect(existsSync(completionFiles(user).zsh)).toBe(true);
+});
+
+test("uninstall removes completion files but leaves foreign ones", async () => {
+  const { user, home } = await completionHome();
+  await install(user, home);
+  writeFileSync(completionFiles(user).fish, "mine\n");
+  await uninstall(user, home);
+  expect(existsSync(completionFiles(user).zsh)).toBe(false);
+  expect(existsSync(completionFiles(user).bash)).toBe(false);
+  expect(readFileSync(completionFiles(user).fish, "utf8")).toBe("mine\n");
 });

@@ -12,8 +12,11 @@ import {
   writeFileSync,
 } from "node:fs";
 import { basename, dirname, join } from "node:path";
+import { completionPath, completionScript, type Shell } from "./completion.ts";
+import { COMMAND_HELP } from "./help.ts";
 import { HOOK_NAMES, hookLogPath } from "./hooks/run-hook.ts";
 import { type Runner, serverResponds, spawnRunner } from "./ollama/launch.ts";
+import { loadSizes } from "./ollama/sizes.ts";
 
 const START = "# >>> claude-lite >>>";
 const END = "# <<< claude-lite <<<";
@@ -21,19 +24,56 @@ const BLOCK = new RegExp(`\\n?${START}[\\s\\S]*?${END}\\n?`);
 
 const claudeMdBlock = (home: string) =>
   `${START}\n@${join(home, "config", "PREFERENCES.md")}\n${END}\n`;
-const posixBlock = (home: string) =>
-  `${START}\nclaude() { env CLAUDE_LITE_HOME="${home}" command claude --settings "${home}/config/personal-settings.json" "$@"; }\n${END}\n`;
+const claudeFunction = (home: string) =>
+  `claude() { env CLAUDE_LITE_HOME="${home}" command claude --settings "${home}/config/personal-settings.json" "$@"; }`;
+const zshBlock = (userHome: string, home: string) =>
+  `${START}\n${claudeFunction(home)}\nfpath+=(${dirname(completionPath(userHome, "zsh"))})\n(( $+functions[compdef] )) && { autoload -Uz _cl; compdef _cl cl; }\n${END}\n`;
+const bashBlock = (userHome: string, home: string) =>
+  `${START}\n${claudeFunction(home)}\n[ -f ${completionPath(userHome, "bash")} ] && . ${completionPath(userHome, "bash")}\n${END}\n`;
 const fishBlock = (home: string) =>
   `${START}\nfunction claude\n  env CLAUDE_LITE_HOME="${home}" command claude --settings "${home}/config/personal-settings.json" $argv\nend\n${END}\n`;
 
 function targets(userHome: string, home: string): [string, string][] {
   const claudeMd = join(userHome, ".claude", "CLAUDE.md");
   const rcs: [string, string][] = [
-    [join(userHome, ".zshrc"), posixBlock(home)],
-    [join(userHome, ".bashrc"), posixBlock(home)],
+    [join(userHome, ".zshrc"), zshBlock(userHome, home)],
+    [join(userHome, ".bashrc"), bashBlock(userHome, home)],
     [join(userHome, ".config", "fish", "config.fish"), fishBlock(home)],
   ];
   return [[claudeMd, claudeMdBlock(home)], ...rcs.filter(([path]) => existsSync(path))];
+}
+
+const SHELL_RCS: [Shell, string[]][] = [
+  ["zsh", [".zshrc"]],
+  ["bash", [".bashrc"]],
+  ["fish", [".config", "fish", "config.fish"]],
+];
+
+const presentShells = (userHome: string) =>
+  SHELL_RCS.filter(([, rc]) => existsSync(join(userHome, ...rc))).map(([shell]) => shell);
+
+function completionWords(home: string) {
+  let sizes: string[] = [];
+  try {
+    sizes = Object.keys(loadSizes(home));
+  } catch {}
+  return { commands: Object.keys(COMMAND_HELP), hooks: HOOK_NAMES, sizes };
+}
+
+function writeCompletions(userHome: string, home: string) {
+  const words = completionWords(home);
+  for (const shell of presentShells(userHome)) {
+    const path = completionPath(userHome, shell);
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, completionScript(shell, words));
+  }
+}
+
+function removeCompletions(userHome: string) {
+  for (const shell of presentShells(userHome)) {
+    const path = completionPath(userHome, shell);
+    if (existsSync(path) && BLOCK.test(readFileSync(path, "utf8"))) unlinkSync(path);
+  }
 }
 
 function rewrite(path: string, update: (text: string) => string) {
@@ -86,6 +126,7 @@ export async function install(userHome: string, home: string): Promise<number> {
       );
     });
   }
+  writeCompletions(userHome, home);
   linkCl(userHome, home);
   return 0;
 }
@@ -94,6 +135,7 @@ export async function uninstall(userHome: string, home: string): Promise<number>
   for (const [path] of targets(userHome, home)) {
     if (existsSync(path)) rewrite(path, (text) => text.replace(BLOCK, ""));
   }
+  removeCompletions(userHome);
   unlinkCl(userHome, home);
   return 0;
 }

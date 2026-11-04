@@ -15,6 +15,8 @@ A small TypeScript + Bun take on claude-custom: guard hooks, an Ollama launcher,
     cl fix-servers               # keeps Ollama.app; moves leftover Ollama LaunchAgents to ~/.Trash
     cl <command> --help          # usage for one command
 
+`install` also sets up tab completion for zsh, bash and fish (for each shell whose rc file exists); `update` refreshes it and `uninstall` removes it.
+
 ### Upgrading an older install
 
 An older binary has no `update` and no `cl`. Run once, then open a new shell; after that `cl update` works:
