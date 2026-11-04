@@ -1,7 +1,7 @@
 {
   "27b": {
-    "base": "qwen3.8:27b-mlx",
-    "model": "qwen3.8-27b-cc",
+    "base": "qwen3.8:27b-dflash2-nvfp4",
+    "model": "qwen3.8-27b-dflash-cc",
     "context": 65536,
     "output_tokens": 8192,
     "parameters": {

@@ -45,7 +45,7 @@ test("missing model pulls and creates, default size 27b", async () => {
   const { calls, run } = recorder(true);
   await launch(home, [], run);
   expect(calls.map((c) => c[1])).toEqual(["-sf", "show", "pull", "create", "--settings"]);
-  expect(calls[2][2]).toBe("qwen3.8:27b-mlx");
+  expect(calls[2][2]).toBe("qwen3.8:27b-dflash2-nvfp4");
 });
 
 test("launch stops when the ollama server does not respond", async () => {
