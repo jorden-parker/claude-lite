@@ -1,4 +1,4 @@
-import { appendFileSync, mkdirSync } from "node:fs";
+import { appendFileSync, mkdirSync, renameSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { decide as bashGuard } from "./bash-guard.ts";
@@ -9,12 +9,14 @@ import { decide as readGuard } from "./read-guard.ts";
 import { decideWithStateFile as tddGuard } from "./tdd-guard.ts";
 import type { HookEvent, HookResult } from "./types.ts";
 
+const MAX_LOG_BYTES = 5_000_000;
+
 const HOOKS: Record<string, (event: HookEvent) => HookResult> = {
   "bash-guard": bashGuard,
   "bash-trim": bashTrim,
-  "fallow-stop": (event) => fallowStop(event),
+  "fallow-stop": fallowStop,
   "read-guard": readGuard,
-  "edit-check": (event) => editCheck(event),
+  "edit-check": editCheck,
   "tdd-guard": tddGuard,
 };
 
@@ -52,8 +54,24 @@ function appendHookLog(hook: string, event: HookEvent, result: HookResult): void
   try {
     const path = hookLogPath(process.env.HOME ?? homedir());
     mkdirSync(dirname(path), { recursive: true });
+    const logBytes = statSync(path, { throwIfNoEntry: false })?.size ?? 0;
+    if (logBytes > MAX_LOG_BYTES) renameSync(path, `${path}.1`);
     appendFileSync(path, `${line}\n`, { mode: 0o600 });
   } catch {}
+}
+
+async function readEvent(): Promise<HookEvent | undefined> {
+  try {
+    return JSON.parse(await Bun.stdin.text());
+  } catch {
+    return undefined;
+  }
+}
+
+function emitResult(result: HookResult): number {
+  if (result?.output) console.log(JSON.stringify(result.output));
+  if (result?.stderr) console.error(result.stderr);
+  return result?.exitCode ?? 0;
 }
 
 export async function runHook(name: string): Promise<number> {
@@ -62,15 +80,14 @@ export async function runHook(name: string): Promise<number> {
     console.error(`claude-lite: unknown hook ${name}`);
     return 1;
   }
-  let event: HookEvent;
+  const event = await readEvent();
+  if (!event) return 0;
+  let result: HookResult;
   try {
-    event = JSON.parse(await Bun.stdin.text());
+    result = hook(event);
   } catch {
     return 0;
   }
-  const result = hook(event);
   appendHookLog(name, event, result);
-  if (result?.output) console.log(JSON.stringify(result.output));
-  if (result?.stderr) console.error(result.stderr);
-  return result?.exitCode ?? 0;
+  return emitResult(result);
 }
