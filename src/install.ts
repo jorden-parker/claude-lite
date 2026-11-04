@@ -253,6 +253,13 @@ export function ollamaLogPaths(userHome: string, systemRoot = "/"): string[] {
   return [...new Set([...plistLogs, ...appLog])].filter(existsSync);
 }
 
+const OLLAMA_SERVER_ENV: [string, string][] = [
+  ["OLLAMA_KEEP_ALIVE", "-1"],
+  ["OLLAMA_NUM_PARALLEL", "1"],
+  ["OLLAMA_FLASH_ATTENTION", "1"],
+  ["OLLAMA_KV_CACHE_TYPE", "q8_0"],
+];
+
 export async function servers(
   userHome: string,
   _home: string,
@@ -265,6 +272,8 @@ export async function servers(
   await run(["lsof", "-nP", "-iTCP:11434", "-sTCP:LISTEN"]);
   const responds = await serverResponds(run);
   console.log(`${responds ? "ok  " : "FAIL"} server responds`);
+  for (const [name, value] of OLLAMA_SERVER_ENV) await run(["launchctl", "setenv", name, value]);
+  console.log("restart Ollama.app to apply server env");
   const oneSource = sources.length <= 1;
   if (!oneSource)
     console.log(

@@ -255,6 +255,26 @@ test("servers shows the port 11434 listener", async () => {
   expect(seen[0]).toEqual(["lsof", "-nP", "-iTCP:11434", "-sTCP:LISTEN"]);
 });
 
+test("servers sets the Ollama server env through launchctl", async () => {
+  const { user, system } = ollamaRoots();
+  const seen: string[][] = [];
+  await servers(
+    user,
+    "/lite",
+    async (argv) => {
+      seen.push(argv);
+      return 0;
+    },
+    system,
+  );
+  expect(seen.filter((argv) => argv[0] === "launchctl")).toEqual([
+    ["launchctl", "setenv", "OLLAMA_KEEP_ALIVE", "-1"],
+    ["launchctl", "setenv", "OLLAMA_NUM_PARALLEL", "1"],
+    ["launchctl", "setenv", "OLLAMA_FLASH_ATTENTION", "1"],
+    ["launchctl", "setenv", "OLLAMA_KV_CACHE_TYPE", "q8_0"],
+  ]);
+});
+
 test("servers passes with one startup source", async () => {
   const { user, system } = ollamaRoots();
   touch(join(user, "Library/LaunchAgents/local.ollama.plist"));
