@@ -18,7 +18,7 @@ import { launch } from "./ollama/launch.ts";
 const LIFECYCLE: Record<
   Exclude<keyof typeof COMMAND_HELP, "hook" | "ollama">,
   (userHome: string, home: string) => Promise<number>
-> = { install, uninstall, update, doctor, logs, servers, "fix-servers": fixServers };
+> = { install, uninstall, update, doctor, logs, servers, settings, "fix-servers": fixServers };
 
 const isHelpFlag = (arg: string | undefined) => arg === "-h" || arg === "--help";
 
@@ -38,6 +38,7 @@ async function main(argv: string[]): Promise<number> {
   if (command && command in LIFECYCLE) {
     const name = command as keyof typeof LIFECYCLE;
     const code = await LIFECYCLE[name](process.env.HOME ?? homedir(), home);
+    if (name === "settings") return code;
     console.log(
       code === 0 ? `claude-lite: ${name} done` : `claude-lite: ${name} failed (exit ${code})`,
     );

@@ -13,6 +13,8 @@ export const COMMAND_HELP = {
   logs: "usage: claude-lite logs\n  follows hook decisions and the Ollama logs named in its launchd plists and Ollama.app",
   servers:
     "usage: claude-lite servers\n  lists Ollama startup sources and the port 11434 listener; fails when more than one source would start a server or the server does not respond",
+  settings:
+    "usage: claude-lite settings\n  prints config/personal-settings.json with config/local-settings.json merged over it, as one line of JSON for claude --settings",
   "fix-servers":
     "usage: claude-lite fix-servers\n  keeps Ollama.app: boots out and moves Ollama LaunchAgents in ~/Library/LaunchAgents to ~/.Trash, then opens Ollama; reports plists that need sudo",
 } as const satisfies Record<string, string>;

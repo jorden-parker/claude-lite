@@ -25,13 +25,13 @@ const BLOCK = new RegExp(`\\n?${START}[\\s\\S]*?${END}\\n?`);
 const claudeMdBlock = (home: string) =>
   `${START}\n@${join(home, "config", "PREFERENCES.md")}\n${END}\n`;
 const claudeFunction = (home: string) =>
-  `claude() { env CLAUDE_LITE_HOME="${home}" command claude --settings "${home}/config/personal-settings.json" "$@"; }`;
+  `claude() { env CLAUDE_LITE_HOME="${home}" command claude --settings "$("${home}/dist/claude-lite" settings)" "$@"; }`;
 const zshBlock = (userHome: string, home: string) =>
   `${START}\n${claudeFunction(home)}\nfpath+=(${dirname(completionPath(userHome, "zsh"))})\n(( $+functions[compdef] )) && { autoload -Uz _cl; compdef _cl cl; }\n${END}\n`;
 const bashBlock = (userHome: string, home: string) =>
   `${START}\n${claudeFunction(home)}\n[ -f ${completionPath(userHome, "bash")} ] && . ${completionPath(userHome, "bash")}\n${END}\n`;
 const fishBlock = (home: string) =>
-  `${START}\nfunction claude\n  env CLAUDE_LITE_HOME="${home}" command claude --settings "${home}/config/personal-settings.json" $argv\nend\n${END}\n`;
+  `${START}\nfunction claude\n  env CLAUDE_LITE_HOME="${home}" command claude --settings ("${home}/dist/claude-lite" settings) $argv\nend\n${END}\n`;
 
 function targets(userHome: string, home: string): [string, string][] {
   const claudeMd = join(userHome, ".claude", "CLAUDE.md");
@@ -305,4 +305,36 @@ export async function fixServers(
   for (const plist of needSudo) console.log(`FAIL needs sudo: ${plist}`);
   await run(["open", "-a", "Ollama"]);
   return needSudo.length ? 1 : 0;
+}
+
+type JsonObject = Record<string, unknown>;
+
+const isJsonObject = (value: unknown): value is JsonObject =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+export function mergeSettings(base: JsonObject, overlay: JsonObject): JsonObject {
+  const merged: JsonObject = { ...base };
+  for (const [key, overlayValue] of Object.entries(overlay)) {
+    const baseValue = merged[key];
+    merged[key] =
+      isJsonObject(baseValue) && isJsonObject(overlayValue)
+        ? mergeSettings(baseValue, overlayValue)
+        : overlayValue;
+  }
+  return merged;
+}
+
+export async function settings(_userHome: string, home: string): Promise<number> {
+  const base = JSON.parse(readFileSync(join(home, "config", "personal-settings.json"), "utf8"));
+  const overlayPath = join(home, "config", "local-settings.json");
+  let effective = base;
+  if (existsSync(overlayPath)) {
+    try {
+      effective = mergeSettings(base, JSON.parse(readFileSync(overlayPath, "utf8")));
+    } catch (error) {
+      console.error(`claude-lite: ignoring invalid ${overlayPath}: ${(error as Error).message}`);
+    }
+  }
+  console.log(JSON.stringify(effective));
+  return 0;
 }

@@ -1,3 +1,4 @@
 node_modules
 dist
 *.bun-build
+config/local-settings.json
