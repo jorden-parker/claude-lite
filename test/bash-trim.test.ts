@@ -26,3 +26,7 @@ test("long lines are clipped", () => {
   const out = run("x".repeat(1000)).output.hookSpecificOutput.updatedToolOutput;
   expect(out.stdout).toContain("600 chars hidden");
 });
+
+test("trimText stays internal to the hook", async () => {
+  expect(Object.keys(await import("../src/hooks/bash-trim.ts"))).not.toContain("trimText");
+});

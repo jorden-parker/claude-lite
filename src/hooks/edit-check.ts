@@ -63,6 +63,36 @@ function writtenPairs(path: string, input: Record<string, any>): [string, string
   return [[committedText(path), input.content ?? ""]];
 }
 
+function commentProblems(path: string, input: Record<string, any>, language: string): string[] {
+  const comments = writtenPairs(path, input).flatMap(([before, after]) =>
+    newComments(before, after, language),
+  );
+  if (!comments.length) return [];
+  return [
+    `New comments are not allowed; rewrite the code so it explains itself:\n${comments.slice(0, 5).join("\n")}`,
+  ];
+}
+
+function toolProblems(
+  path: string,
+  language: string,
+  run: Run,
+  available: (tool: string) => boolean,
+): string[] {
+  const problems: string[] = [];
+  for (const check of checksFor(path, language)) {
+    const tool = check.command[0];
+    if (!tool.includes("/") && !available(tool)) continue;
+    const result = run(check.command, check.cwd);
+    if (result && (!result.ok || (tool === "gofmt" && result.output.trim() !== ""))) {
+      problems.push(
+        `${tool.split("/").pop()} failed:\n${result.output.split("\n").slice(0, 40).join("\n")}`,
+      );
+    }
+  }
+  return problems;
+}
+
 export function decide(
   event: HookEvent,
   run: Run = defaultRun,
@@ -74,23 +104,9 @@ export function decide(
   const path = resolve(event.cwd ?? ".", input.file_path);
   const language = EXTENSION_LANGUAGES[extname(path)];
   if (!language || !existsSync(path)) return null;
-  const problems: string[] = [];
-  const comments = writtenPairs(path, input).flatMap(([before, after]) =>
-    newComments(before, after, language),
-  );
-  if (comments.length)
-    problems.push(
-      `New comments are not allowed; rewrite the code so it explains itself:\n${comments.slice(0, 5).join("\n")}`,
-    );
-  for (const check of checksFor(path, language)) {
-    const tool = check.command[0];
-    if (!tool.includes("/") && !available(tool)) continue;
-    const result = run(check.command, check.cwd);
-    if (result && (!result.ok || (tool === "gofmt" && result.output.trim() !== ""))) {
-      problems.push(
-        `${tool.split("/").pop()} failed:\n${result.output.split("\n").slice(0, 40).join("\n")}`,
-      );
-    }
-  }
+  const problems = [
+    ...commentProblems(path, input, language),
+    ...toolProblems(path, language, run, available),
+  ];
   return problems.length ? { exitCode: 2, stderr: problems.join("\n\n") } : null;
 }

@@ -63,3 +63,7 @@ test("third strike passes", () => {
   expect(isDeny(third)).toBe(false);
   expect(third.output.hookSpecificOutput.additionalContext).toContain("let a.go through");
 });
+
+test("commentsIn stays internal to comments", async () => {
+  expect(Object.keys(await import("../src/hooks/comments.ts"))).not.toContain("commentsIn");
+});

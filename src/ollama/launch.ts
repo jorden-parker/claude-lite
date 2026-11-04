@@ -13,7 +13,7 @@ export const spawnRunner: Runner = async (argv, env) =>
 
 const TOOLS = "Bash,Read,Edit,Write,Skill";
 
-export function buildPlan(home: string, args: string[]) {
+function buildPlan(home: string, args: string[]) {
   const sizes = loadSizes(home);
   const [first, ...rest] = args;
   const sizeName = first && sizes[first] ? first : DEFAULT_SIZE;

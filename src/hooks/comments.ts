@@ -36,7 +36,7 @@ function lineComment(line: string, markers: string[]): string | null {
   return null;
 }
 
-export function commentsIn(text: string, language: string): string[] {
+function commentsIn(text: string, language: string): string[] {
   return text
     .split("\n")
     .map((line) => lineComment(line, MARKERS[language]))

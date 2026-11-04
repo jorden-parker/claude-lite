@@ -48,3 +48,19 @@ test("ignores comment markers inside strings and directives", () => {
 });
 
 test("keeps existing comments", () => expect(newComments("a // k", "a // k\nb", "js")).toEqual([]));
+
+test("reports gofmt output even when gofmt exits cleanly", () => {
+  const goFile = join(dir, "a.go");
+  writeFileSync(goFile, "package a\n");
+  const result = decide(
+    {
+      tool_name: "Edit",
+      cwd: dir,
+      tool_input: { file_path: goFile, old_string: "a", new_string: "b" },
+    },
+    () => ({ ok: true, output: "a.go\n" }),
+    () => true,
+  );
+  expect(result?.exitCode).toBe(2);
+  expect(result?.stderr).toContain("gofmt failed");
+});

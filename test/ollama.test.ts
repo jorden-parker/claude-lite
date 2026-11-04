@@ -51,3 +51,7 @@ test("personal settings carry the same hooks as hooks.json", async () => {
   const read = async (name: string) => await Bun.file(join(home, "config", name)).json();
   expect((await read("personal-settings.json")).hooks).toEqual(await read("hooks.json"));
 });
+
+test("launch plan helpers stay internal to the launcher", async () => {
+  expect(Object.keys(await import("../src/ollama/launch.ts"))).not.toContain("buildPlan");
+});

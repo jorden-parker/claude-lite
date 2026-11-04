@@ -24,7 +24,7 @@ function trimLines(lines: string[]): string[] {
   return [...lines.slice(0, HEAD_LINES), ...signals, marker, ...lines.slice(-TAIL_LINES)];
 }
 
-export const trimText = (text: string) => trimLines(text.split("\n")).map(clip).join("\n");
+const trimText = (text: string) => trimLines(text.split("\n")).map(clip).join("\n");
 
 export function decide(event: HookEvent): HookResult {
   const response = event.tool_response;

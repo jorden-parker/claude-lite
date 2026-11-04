@@ -72,6 +72,17 @@ function record(state: TddState, event: HookEvent) {
   }
 }
 
+function letThroughNotice(path: string): HookResult {
+  return {
+    output: {
+      hookSpecificOutput: {
+        hookEventName: "PreToolUse",
+        additionalContext: `tdd-guard let ${basename(path)} through after ${STRIKE_LIMIT} refusals; write its test next.`,
+      },
+    },
+  };
+}
+
 function gate(state: TddState, event: HookEvent): HookResult {
   const input = event.tool_input ?? {};
   if (!EDIT_TOOLS.includes(event.tool_name ?? "") || !input.file_path) return null;
@@ -81,16 +92,7 @@ function gate(state: TddState, event: HookEvent): HookResult {
   if (editedAt && state.testRunAt > editedAt) return null;
   const strikes = (state.strikes[path] ?? 0) + 1;
   state.strikes[path] = strikes;
-  if (strikes > STRIKE_LIMIT) {
-    return {
-      output: {
-        hookSpecificOutput: {
-          hookEventName: "PreToolUse",
-          additionalContext: `tdd-guard let ${basename(path)} through after ${STRIKE_LIMIT} refusals; write its test next.`,
-        },
-      },
-    };
-  }
+  if (strikes > STRIKE_LIMIT) return letThroughNotice(path);
   return deny(
     `TDD: edit or add a failing test beside ${basename(path)} first, run the tests and see it fail, then edit ${basename(path)}.`,
   );
