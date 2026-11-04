@@ -45,3 +45,16 @@ test("blocks with findings capped at 15 lines plus a hint", () => {
   expect(lines[15]).toBe("[5 more]");
   expect(lines[16]).toContain("fallow explain");
 });
+
+test("lists untracked files individually so new folders are seen", () => {
+  const seen: string[][] = [];
+  decideFallowStop(
+    event,
+    (command) => {
+      seen.push(command);
+      return { ok: true, output: "" };
+    },
+    fallow,
+  );
+  expect(seen[0]).toContain("--untracked-files=all");
+});

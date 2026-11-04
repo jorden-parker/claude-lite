@@ -1,4 +1,3 @@
-import { spawnSync } from "node:child_process";
 import { join } from "node:path";
 import { defaultRun, nearestDirWith, type Run } from "./edit-check.ts";
 import type { HookEvent, HookResult } from "./types.ts";
@@ -9,16 +8,14 @@ const LOCAL_BIN = join("node_modules", ".bin", "fallow");
 const HINT =
   "Run fallow explain <rule> for any you don't understand; delete dead code, don't suppress it.";
 
-const onPath = () => spawnSync("which", ["fallow"], { encoding: "utf8" }).status === 0;
-
 function defaultBinFor(cwd: string): string | null {
   const root = nearestDirWith(cwd, [LOCAL_BIN]);
   if (root) return join(root, LOCAL_BIN);
-  return onPath() ? "fallow" : null;
+  return Bun.which("fallow") ? "fallow" : null;
 }
 
 function changedScript(cwd: string, run: Run): boolean {
-  const status = run(["git", "status", "--porcelain"], cwd);
+  const status = run(["git", "status", "--porcelain", "--untracked-files=all"], cwd);
   if (!status?.ok) return false;
   return status.output.split("\n").some((line) => SCRIPT_FILE.test(line.trim()));
 }

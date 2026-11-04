@@ -1,3 +1,4 @@
+export const EDIT_TOOLS = ["Edit", "Write", "MultiEdit"];
 export type HookEvent = {
   hook_event_name?: string;
   session_id?: string;

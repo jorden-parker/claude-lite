@@ -1,8 +1,8 @@
 import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, extname, join, resolve } from "node:path";
 import { EXTENSION_LANGUAGES, newComments } from "./comments.ts";
-import type { HookEvent, HookResult } from "./types.ts";
+import { EDIT_TOOLS, type HookEvent, type HookResult } from "./types.ts";
 
 export type Run = (
   command: string[],
@@ -19,12 +19,23 @@ export const defaultRun: Run = (command, cwd) => {
   };
 };
 
-const onPath = (tool: string) => spawnSync("which", [tool], { encoding: "utf8" }).status === 0;
-
 export function nearestDirWith(start: string, names: string[]): string | null {
   for (let dir = start; ; dir = dirname(dir)) {
     if (names.some((name) => existsSync(join(dir, name)))) return dir;
     if (dirname(dir) === dir) return null;
+  }
+}
+
+function declaredPackages(packageDir: string | null): Set<string> {
+  if (!packageDir) return new Set();
+  try {
+    const manifest = JSON.parse(readFileSync(join(packageDir, "package.json"), "utf8"));
+    return new Set([
+      ...Object.keys(manifest.dependencies ?? {}),
+      ...Object.keys(manifest.devDependencies ?? {}),
+    ]);
+  } catch {
+    return new Set();
   }
 }
 
@@ -36,13 +47,14 @@ function checksFor(path: string, language: string): { command: string[]; cwd: st
   const root = nearestDirWith(cwd, ["node_modules"]);
   if (!root) return [];
   const bin = (name: string) => join(root, "node_modules", ".bin", name);
+  const declared = declaredPackages(nearestDirWith(cwd, ["package.json"]));
   const tools: [string, string[]][] = [
     ["prettier", ["--check"]],
     ["eslint", []],
     ["biome", ["check"]],
   ];
   return tools
-    .filter(([name]) => existsSync(bin(name)))
+    .filter(([name]) => declared.has(name) && existsSync(bin(name)))
     .map(([name, args]) => ({ command: [bin(name), ...args, path], cwd: root }));
 }
 
@@ -96,11 +108,10 @@ function toolProblems(
 export function decide(
   event: HookEvent,
   run: Run = defaultRun,
-  available: (tool: string) => boolean = onPath,
+  available: (tool: string) => boolean = (tool) => Bun.which(tool) !== null,
 ): HookResult {
   const input = event.tool_input ?? {};
-  if (!["Edit", "Write", "MultiEdit"].includes(event.tool_name ?? "") || !input.file_path)
-    return null;
+  if (!EDIT_TOOLS.includes(event.tool_name ?? "") || !input.file_path) return null;
   const path = resolve(event.cwd ?? ".", input.file_path);
   const language = EXTENSION_LANGUAGES[extname(path)];
   if (!language || !existsSync(path)) return null;

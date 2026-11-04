@@ -1,5 +1,8 @@
 import { expect, test } from "bun:test";
-import { decide, emptyState } from "../src/hooks/tdd-guard.ts";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { decide, decideWithStateFile, emptyState } from "../src/hooks/tdd-guard.ts";
 
 const pre = (file: string) => ({
   hook_event_name: "PreToolUse",
@@ -66,4 +69,17 @@ test("third strike passes", () => {
 
 test("commentsIn stays internal to comments", async () => {
   expect(Object.keys(await import("../src/hooks/comments.ts"))).not.toContain("commentsIn");
+});
+
+test("denies .mts code before a test", () =>
+  expect(isDeny(decide(pre("/p/a.mts"), emptyState()))).toBe(true));
+
+test("a corrupt state file fails open and is rewritten", () => {
+  const dir = mkdtempSync(join(tmpdir(), "tdd-"));
+  writeFileSync(join(dir, "s1.json"), "");
+  process.env.CLAUDE_LITE_STATE_DIR = dir;
+  const result = decideWithStateFile({ ...pre("/p/a.go"), session_id: "s1" });
+  delete process.env.CLAUDE_LITE_STATE_DIR;
+  expect(isDeny(result)).toBe(true);
+  expect(JSON.parse(readFileSync(join(dir, "s1.json"), "utf8")).strikes).toEqual({ "/p/a.go": 1 });
 });

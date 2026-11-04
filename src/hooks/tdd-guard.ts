@@ -1,23 +1,10 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, extname, join, resolve, sep } from "node:path";
-import { deny, type HookEvent, type HookResult } from "./types.ts";
+import { EXTENSION_LANGUAGES } from "./comments.ts";
+import { nearestDirWith } from "./edit-check.ts";
+import { deny, EDIT_TOOLS, type HookEvent, type HookResult } from "./types.ts";
 
-const EDIT_TOOLS = ["Edit", "Write", "MultiEdit"];
-const CODE_SUFFIXES = [
-  ".go",
-  ".ts",
-  ".tsx",
-  ".js",
-  ".jsx",
-  ".mjs",
-  ".cjs",
-  ".py",
-  ".sh",
-  ".bash",
-  ".zsh",
-];
-const PACKAGE_SUFFIXES = [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"];
 const TEST_NAME = /(^|[._-])(test|tests|spec)([._-]|$)/i;
 const CONFIG_NAME = /(\.config\.[a-z]+|^\.[a-z0-9-]+rc(\.[a-z]+)?)$/i;
 const TEST_DIRS = ["test", "tests", "__tests__", "testdata", "fixtures", "eval", ".claude"];
@@ -44,14 +31,11 @@ const inTestDir = (path: string) =>
     .split(sep)
     .some((part) => TEST_DIRS.includes(part));
 const isCode = (path: string) =>
-  CODE_SUFFIXES.includes(extname(path)) && !CONFIG_NAME.test(basename(path));
+  Object.hasOwn(EXTENSION_LANGUAGES, extname(path)) && !CONFIG_NAME.test(basename(path));
 
 function scopeOf(path: string): string {
-  if (!PACKAGE_SUFFIXES.includes(extname(path))) return dirname(path);
-  for (let dir = dirname(path); dirname(dir) !== dir; dir = dirname(dir)) {
-    if (existsSync(join(dir, "package.json"))) return dir;
-  }
-  return dirname(path);
+  if (EXTENSION_LANGUAGES[extname(path)] !== "js") return dirname(path);
+  return nearestDirWith(dirname(path), ["package.json"]) ?? dirname(path);
 }
 
 const ranTest = (command: string) =>
@@ -106,13 +90,23 @@ export function decide(event: HookEvent, state: TddState): HookResult {
   return event.hook_event_name === "PreToolUse" ? gate(state, event) : null;
 }
 
+function readState(file: string): TddState {
+  try {
+    return JSON.parse(readFileSync(file, "utf8"));
+  } catch {
+    return emptyState();
+  }
+}
+
 export function decideWithStateFile(event: HookEvent): HookResult {
   if (process.env.CLAUDE_LITE_TDD === "0") return null;
   const dir = process.env.CLAUDE_LITE_STATE_DIR ?? join(homedir(), ".cache", "claude-lite", "tdd");
   const file = join(dir, `${event.session_id ?? "nosession"}.json`);
-  const state: TddState = existsSync(file) ? JSON.parse(readFileSync(file, "utf8")) : emptyState();
+  const state = readState(file);
   const result = decide(event, state);
   mkdirSync(dir, { recursive: true });
-  writeFileSync(file, JSON.stringify(state));
+  const pending = `${file}.${process.pid}.tmp`;
+  writeFileSync(pending, JSON.stringify(state));
+  renameSync(pending, file);
   return result;
 }

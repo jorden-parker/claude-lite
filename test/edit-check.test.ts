@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { newComments } from "../src/hooks/comments.ts";
@@ -63,4 +63,30 @@ test("reports gofmt output even when gofmt exits cleanly", () => {
   );
   expect(result?.exitCode).toBe(2);
   expect(result?.stderr).toContain("gofmt failed");
+});
+
+function jsProject(packageJson: object) {
+  const root = mkdtempSync(join(tmpdir(), "ec-js-"));
+  mkdirSync(join(root, "node_modules", ".bin"), { recursive: true });
+  writeFileSync(join(root, "node_modules", ".bin", "prettier"), "");
+  writeFileSync(join(root, "package.json"), JSON.stringify(packageJson));
+  const source = join(root, "a.ts");
+  writeFileSync(source, "const x = 1;\n");
+  return { root, source };
+}
+const jsEdit = (root: string, source: string) => ({
+  tool_name: "Edit",
+  cwd: root,
+  tool_input: { file_path: source, old_string: "x = 1", new_string: "x = 2" },
+});
+const failing = () => ({ ok: false, output: "bad" });
+
+test("skips a linter the project does not depend on", () => {
+  const { root, source } = jsProject({ devDependencies: { eslint: "1" } });
+  expect(decide(jsEdit(root, source), failing, () => false)).toBeNull();
+});
+
+test("runs a linter the project lists", () => {
+  const { root, source } = jsProject({ devDependencies: { prettier: "1" } });
+  expect(decide(jsEdit(root, source), failing, () => false)?.exitCode).toBe(2);
 });
