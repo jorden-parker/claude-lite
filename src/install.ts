@@ -1,5 +1,16 @@
-import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  copyFileSync,
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readFileSync,
+  readlinkSync,
+  symlinkSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, join } from "node:path";
+import { type Runner, spawnRunner } from "./ollama/launch.ts";
 
 const START = "# >>> claude-lite >>>";
 const END = "# <<< claude-lite <<<";
@@ -31,7 +42,38 @@ function rewrite(path: string, update: (text: string) => string) {
   writeFileSync(path, after);
 }
 
-export function install(userHome: string, home: string) {
+const clLinkPath = (userHome: string) => join(userHome, ".local", "bin", "cl");
+const binaryPath = (home: string) => join(home, "dist", "claude-lite");
+
+function readLink(path: string): string | null | undefined {
+  try {
+    return lstatSync(path).isSymbolicLink() ? readlinkSync(path) : null;
+  } catch {
+    return undefined;
+  }
+}
+
+function linkCl(userHome: string, home: string) {
+  const link = clLinkPath(userHome);
+  const target = readLink(link);
+  if (target === null || (target !== undefined && !target.endsWith("/dist/claude-lite"))) {
+    console.error(`claude-lite: ${link} is not a claude-lite link, left alone`);
+    return;
+  }
+  mkdirSync(dirname(link), { recursive: true });
+  if (target !== undefined) unlinkSync(link);
+  symlinkSync(binaryPath(home), link);
+  if (!(process.env.PATH ?? "").split(":").includes(dirname(link))) {
+    console.error(`claude-lite: add ${dirname(link)} to PATH to use cl`);
+  }
+}
+
+function unlinkCl(userHome: string, home: string) {
+  const link = clLinkPath(userHome);
+  if (readLink(link) === binaryPath(home)) unlinkSync(link);
+}
+
+export async function install(userHome: string, home: string): Promise<number> {
   for (const [path, block] of targets(userHome, home)) {
     rewrite(path, (text) => {
       const stripped = text.replace(BLOCK, "");
@@ -41,10 +83,32 @@ export function install(userHome: string, home: string) {
       );
     });
   }
+  linkCl(userHome, home);
+  return 0;
 }
 
-export function uninstall(userHome: string, home: string) {
+export async function uninstall(userHome: string, home: string): Promise<number> {
   for (const [path] of targets(userHome, home)) {
     if (existsSync(path)) rewrite(path, (text) => text.replace(BLOCK, ""));
   }
+  unlinkCl(userHome, home);
+  return 0;
+}
+
+export async function update(
+  _userHome: string,
+  home: string,
+  run: Runner = spawnRunner,
+): Promise<number> {
+  const steps = [
+    ["git", "-C", home, "pull", "--ff-only"],
+    ["bun", "install", "--cwd", home],
+    ["bun", "run", "--cwd", home, "build"],
+    [binaryPath(home), "install"],
+  ];
+  for (const step of steps) {
+    const code = await run(step);
+    if (code !== 0) return code;
+  }
+  return 0;
 }

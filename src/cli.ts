@@ -2,21 +2,26 @@
 import { homedir } from "node:os";
 import { liteHome } from "./home.ts";
 import { runHook } from "./hooks/run-hook.ts";
-import { install, uninstall } from "./install.ts";
+import { install, uninstall, update } from "./install.ts";
 import { launch } from "./ollama/launch.ts";
 
+const LIFECYCLE = { install, uninstall, update };
+
 const USAGE =
-  "usage: claude-lite hook <name> | ollama [27b|35b] [--print-config] [claude args] | install | uninstall";
+  "usage: claude-lite hook <name> | ollama [27b|35b] [--print-config] [claude args] | install | update | uninstall";
 
 async function main(argv: string[]): Promise<number> {
   const [command, ...rest] = argv;
   const home = liteHome();
   if (command === "hook" && rest[0]) return await runHook(rest[0]);
   if (command === "ollama") return await launch(home, rest);
-  if (command === "install" || command === "uninstall") {
-    (command === "install" ? install : uninstall)(process.env.HOME ?? homedir(), home);
-    console.log(`claude-lite: ${command} done`);
-    return 0;
+  if (command && command in LIFECYCLE) {
+    const name = command as keyof typeof LIFECYCLE;
+    const code = await LIFECYCLE[name](process.env.HOME ?? homedir(), home);
+    console.log(
+      code === 0 ? `claude-lite: ${name} done` : `claude-lite: ${name} failed (exit ${code})`,
+    );
+    return code;
   }
   console.error(USAGE);
   return 2;

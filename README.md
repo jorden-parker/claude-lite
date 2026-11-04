@@ -2,11 +2,19 @@
 
 A small TypeScript + Bun take on claude-custom: guard hooks, an Ollama launcher, and an installer. No UI.
 
-## Install
+## Install, update, uninstall
 
-    bun install && bun run build      # dist/claude-lite
-    dist/claude-lite install          # CLAUDE.md @-import + `claude` function in rc files (backs up each file)
-    dist/claude-lite uninstall        # removes only its own marked blocks
+    bun install && bun run build
+    dist/claude-lite install     # CLAUDE.md @-import, `claude` rc function, ~/.local/bin/cl link (backs up each file)
+
+    cl update                    # git pull --ff-only, bun install, build, install
+    cl uninstall                 # removes only what install added
+
+### Upgrading an older install
+
+An older binary has no `update` and no `cl`. Run once, then open a new shell; after that `cl update` works:
+
+    git pull && bun install && bun run build && dist/claude-lite install
 
 ## Launch on Ollama
 
