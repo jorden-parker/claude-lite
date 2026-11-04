@@ -3,6 +3,7 @@ import {
   existsSync,
   lstatSync,
   mkdirSync,
+  readdirSync,
   readFileSync,
   readlinkSync,
   symlinkSync,
@@ -165,4 +166,38 @@ export async function doctor(
   ];
   for (const [label, ok] of checks) console.log(`${ok ? "ok  " : "FAIL"} ${label}`);
   return checks.every(([, ok]) => ok) ? 0 : 1;
+}
+
+const OLLAMA_PLIST_DIRS = ["Library/LaunchAgents", "Library/LaunchDaemons"];
+
+function ollamaPlists(root: string): string[] {
+  return OLLAMA_PLIST_DIRS.flatMap((dir) => {
+    const path = join(root, dir);
+    if (!existsSync(path)) return [];
+    return readdirSync(path)
+      .filter((name) => /ollama/i.test(name))
+      .map((name) => join(path, name));
+  });
+}
+
+export function ollamaStartupSources(userHome: string, systemRoot = "/"): string[] {
+  const apps = [systemRoot, userHome]
+    .map((root) => join(root, "Applications/Ollama.app"))
+    .filter(existsSync);
+  return [...ollamaPlists(userHome), ...ollamaPlists(systemRoot), ...apps];
+}
+
+export async function servers(
+  userHome: string,
+  _home: string,
+  run: Runner = spawnRunner,
+  systemRoot = "/",
+): Promise<number> {
+  const sources = ollamaStartupSources(userHome, systemRoot);
+  for (const source of sources) console.log(`source ${source}`);
+  console.log("listening on 11434:");
+  await run(["lsof", "-nP", "-iTCP:11434", "-sTCP:LISTEN"]);
+  if (sources.length <= 1) return 0;
+  console.log("FAIL more than one Ollama startup source; they fight over port 11434. Keep one.");
+  return 1;
 }

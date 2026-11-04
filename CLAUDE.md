@@ -11,7 +11,7 @@ TypeScript + Bun: guard hooks, Ollama launcher, installer. See README.md for usa
 
 ## Architecture
 
-- `src/cli.ts`: entry point and subcommand dispatch (`install`, `update`, `uninstall`, `doctor`, `logs`, `ollama`, `hook <name>`)
+- `src/cli.ts`: entry point and subcommand dispatch (`install`, `update`, `uninstall`, `doctor`, `logs`, `servers`, `ollama`, `hook <name>`)
 - `src/hooks/`: each hook is a pure `decide(event)` function. I/O lives only in `run-hook.ts`.
 - `src/ollama/`: Modelfile and settings rendering, size table, launcher
 - `config/`: `hooks.json` wires hooks, `sizes.json` defines model sizes, `system-prompt.md` is injected on launch
@@ -19,7 +19,7 @@ TypeScript + Bun: guard hooks, Ollama launcher, installer. See README.md for usa
 ## Gotchas
 
 - Adding a hook means a new `src/hooks/<name>.ts`, an entry in the `HOOKS` map in `run-hook.ts`, an entry in `config/hooks.json`, and a `test/<name>.test.ts`.
-- `install`, `uninstall`, `update`, `doctor` and `logs` share the signature `(userHome, home, run?) => Promise<number>` and dispatch through `LIFECYCLE` in `cli.ts`. A new lifecycle command goes in `src/install.ts` and that map.
+- `install`, `uninstall`, `update`, `doctor`, `logs` and `servers` share the signature `(userHome, home, run?) => Promise<number>` and dispatch through `LIFECYCLE` in `cli.ts`. A new lifecycle command goes in `src/install.ts` and that map.
 - Every subcommand needs a `COMMAND_HELP` entry in `cli.ts`, so `cl <cmd> --help` prints usage instead of running it.
 - `install` owns the `~/.local/bin/cl` symlink to `dist/claude-lite`; `uninstall` removes it only when it points at this checkout. `update` is pull, build, then the fresh binary's `install`.
 - Commits go through husky, lint-staged and commitlint, so use conventional commit messages.

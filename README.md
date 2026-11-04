@@ -11,6 +11,7 @@ A small TypeScript + Bun take on claude-custom: guard hooks, an Ollama launcher,
     cl uninstall                 # removes only what install added
     cl doctor                    # checks the build, blocks, link and hook config
     cl logs                      # follows hook decisions and the Ollama server log
+    cl servers                   # finds duplicate Ollama servers fighting over port 11434
     cl <command> --help          # usage for one command
 
 ### Upgrading an older install

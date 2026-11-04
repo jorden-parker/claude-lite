@@ -15,7 +15,16 @@ describe("cli help", () => {
     expect(runCli("--help").stdout.toString()).toContain("logs");
   });
 
-  for (const command of ["hook", "ollama", "install", "update", "uninstall", "doctor", "logs"]) {
+  for (const command of [
+    "hook",
+    "ollama",
+    "install",
+    "update",
+    "uninstall",
+    "doctor",
+    "logs",
+    "servers",
+  ]) {
     for (const flag of ["--help", "-h"]) {
       test(`${command} ${flag} prints usage without running`, () => {
         const result = runCli(command, flag);

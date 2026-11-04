@@ -13,7 +13,15 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { doctor, install, logs, uninstall, update } from "../src/install.ts";
+import {
+  doctor,
+  install,
+  logs,
+  ollamaStartupSources,
+  servers,
+  uninstall,
+  update,
+} from "../src/install.ts";
 
 function fixture() {
   const user = mkdtempSync(join(tmpdir(), "inst-"));
@@ -142,4 +150,65 @@ test("logs tails the hook log and the ollama server log", async () => {
     "/u/.ollama/logs/server.log",
   ]);
   expect(code).toBe(7);
+});
+
+function ollamaRoots() {
+  const user = mkdtempSync(join(tmpdir(), "srv-user-"));
+  const system = mkdtempSync(join(tmpdir(), "srv-sys-"));
+  return { user, system };
+}
+
+const touch = (path: string) => {
+  mkdirSync(join(path, ".."), { recursive: true });
+  writeFileSync(path, "");
+};
+
+test("ollamaStartupSources finds launch agents, daemons and Ollama.app", () => {
+  const { user, system } = ollamaRoots();
+  touch(join(user, "Library/LaunchAgents/local.ollama.plist"));
+  touch(join(user, "Library/LaunchAgents/com.example.other.plist"));
+  touch(join(system, "Library/LaunchAgents/homebrew.mxcl.ollama.plist"));
+  touch(join(system, "Library/LaunchDaemons/Ollama.plist"));
+  mkdirSync(join(system, "Applications/Ollama.app"), { recursive: true });
+  mkdirSync(join(user, "Applications/Ollama.app"), { recursive: true });
+  expect(ollamaStartupSources(user, system)).toEqual([
+    join(user, "Library/LaunchAgents/local.ollama.plist"),
+    join(system, "Library/LaunchAgents/homebrew.mxcl.ollama.plist"),
+    join(system, "Library/LaunchDaemons/Ollama.plist"),
+    join(system, "Applications/Ollama.app"),
+    join(user, "Applications/Ollama.app"),
+  ]);
+});
+
+test("ollamaStartupSources is empty when nothing is installed", () => {
+  const { user, system } = ollamaRoots();
+  expect(ollamaStartupSources(user, system)).toEqual([]);
+});
+
+test("servers shows the port 11434 listener", async () => {
+  const { user, system } = ollamaRoots();
+  let seen: string[] = [];
+  await servers(
+    user,
+    "/lite",
+    async (argv) => {
+      seen = argv;
+      return 1;
+    },
+    system,
+  );
+  expect(seen).toEqual(["lsof", "-nP", "-iTCP:11434", "-sTCP:LISTEN"]);
+});
+
+test("servers passes with one startup source", async () => {
+  const { user, system } = ollamaRoots();
+  touch(join(user, "Library/LaunchAgents/local.ollama.plist"));
+  expect(await servers(user, "/lite", async () => 0, system)).toBe(0);
+});
+
+test("servers fails with two startup sources", async () => {
+  const { user, system } = ollamaRoots();
+  touch(join(user, "Library/LaunchAgents/local.ollama.plist"));
+  mkdirSync(join(system, "Applications/Ollama.app"), { recursive: true });
+  expect(await servers(user, "/lite", async () => 0, system)).toBe(1);
 });

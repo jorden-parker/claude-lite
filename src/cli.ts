@@ -2,13 +2,13 @@
 import { homedir } from "node:os";
 import { liteHome } from "./home.ts";
 import { HOOK_NAMES, runHook } from "./hooks/run-hook.ts";
-import { doctor, install, logs, uninstall, update } from "./install.ts";
+import { doctor, install, logs, servers, uninstall, update } from "./install.ts";
 import { launch } from "./ollama/launch.ts";
 
-const LIFECYCLE = { install, uninstall, update, doctor, logs };
+const LIFECYCLE = { install, uninstall, update, doctor, logs, servers };
 
 const USAGE =
-  "usage: claude-lite hook <name> | ollama [27b|35b] [--print-config] [claude args] | install | update | uninstall | doctor | logs";
+  "usage: claude-lite hook <name> | ollama [27b|35b] [--print-config] [claude args] | install | update | uninstall | doctor | logs | servers";
 
 const COMMAND_HELP: Record<string, string> = {
   hook: `usage: claude-lite hook <name>\n  runs one guard hook on the event in stdin; names: ${HOOK_NAMES.join(", ")}`,
@@ -20,6 +20,8 @@ const COMMAND_HELP: Record<string, string> = {
   uninstall: "usage: claude-lite uninstall\n  removes only what install added",
   doctor: "usage: claude-lite doctor\n  checks the build, blocks, link and hook config",
   logs: "usage: claude-lite logs\n  follows hook decisions and the Ollama server log",
+  servers:
+    "usage: claude-lite servers\n  lists Ollama startup sources and the port 11434 listener; fails when more than one source would start a server",
 };
 
 const isHelpFlag = (arg: string | undefined) => arg === "-h" || arg === "--help";
