@@ -24,6 +24,31 @@ test("rejects a new comment", () => {
   expect(result?.stderr).toContain("# why");
 });
 
+test("denies a new comment before the edit lands", () => {
+  const result = decide({ ...edit("x = 1  # why"), hook_event_name: "PreToolUse" });
+  expect(JSON.stringify(result?.output)).toContain('"permissionDecision":"deny"');
+  expect(JSON.stringify(result?.output)).toContain("# why");
+});
+
+test("denies a comment in a file that does not exist yet", () => {
+  const result = decide({
+    hook_event_name: "PreToolUse",
+    tool_name: "Write",
+    cwd: dir,
+    tool_input: { file_path: join(dir, "new/b.ts"), content: "// hi\nexport const b = 1;\n" },
+  });
+  expect(JSON.stringify(result?.output)).toContain("// hi");
+});
+
+test("lets a clean edit through before it lands without running linters", () =>
+  expect(
+    decide(
+      { ...edit("x = 2"), hook_event_name: "PreToolUse" },
+      () => ({ ok: false, output: "E999 bad" }),
+      () => true,
+    ),
+  ).toBeNull());
+
 test("allows a clean edit", () =>
   expect(
     decide(

@@ -10,7 +10,8 @@ their repository toward their goal, using your own judgment.
   Read, Edit and Write over shell equivalents. Run independent tool calls in
   parallel.
 - Cite code as `path:line`.
-- Match the surrounding code: naming, idiom, comment density.
+- Match the surrounding code's naming and idiom. Never write code comments: a
+  hook rejects any edit that adds one, so use clear names instead.
 - Ask before hard-to-reverse or outward-facing actions (deleting, force-push,
   publishing). Look at a file before overwriting or deleting it.
 - Report results faithfully: if tests fail, show the output; if you skipped a

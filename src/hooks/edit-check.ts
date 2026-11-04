@@ -2,7 +2,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, extname, join, resolve } from "node:path";
 import { EXTENSION_LANGUAGES, newComments } from "./comments.ts";
-import { EDIT_TOOLS, type HookEvent, type HookResult } from "./types.ts";
+import { deny, EDIT_TOOLS, type HookEvent, type HookResult } from "./types.ts";
 
 export type Run = (
   command: string[],
@@ -114,7 +114,12 @@ export function decide(
   if (!EDIT_TOOLS.includes(event.tool_name ?? "") || !input.file_path) return null;
   const path = resolve(event.cwd ?? ".", input.file_path);
   const language = EXTENSION_LANGUAGES[extname(path)];
-  if (!language || !existsSync(path)) return null;
+  if (!language) return null;
+  if (event.hook_event_name === "PreToolUse") {
+    const problems = commentProblems(path, input, language);
+    return problems.length ? deny(problems.join("\n\n")) : null;
+  }
+  if (!existsSync(path)) return null;
   const problems = [
     ...commentProblems(path, input, language),
     ...toolProblems(path, language, run, available),

@@ -15,6 +15,7 @@
     {
       "matcher": "Edit|Write|MultiEdit",
       "hooks": [
+        { "type": "command", "command": "\"$CLAUDE_LITE_HOME\"/dist/claude-lite hook edit-check" },
         { "type": "command", "command": "\"$CLAUDE_LITE_HOME\"/dist/claude-lite hook tdd-guard" }
       ]
     }
