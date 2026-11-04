@@ -25,7 +25,7 @@ const claudeMdBlock = (home: string) =>
 const claudeFunction = (home: string) =>
   `claude() { env CLAUDE_LITE_HOME="${home}" command claude --settings "$("${home}/dist/claude-lite" settings)" "$@"; }`;
 const zshBlock = (userHome: string, home: string) =>
-  `${START}\n${claudeFunction(home)}\nfpath+=(${dirname(completionPath(userHome, "zsh"))})\n(( $+functions[compdef] )) || { autoload -Uz compinit; compinit; }\ncompdef _cl cl\n${END}\n`;
+  `${START}\n${claudeFunction(home)}\nfpath+=(${dirname(completionPath(userHome, "zsh"))})\n_cl_register() {\n  add-zsh-hook -d precmd _cl_register\n  unfunction _cl_register\n  (( $+functions[compdef] )) || { autoload -Uz compinit; compinit; }\n  autoload -Uz _cl\n  compdef _cl cl\n}\nautoload -Uz add-zsh-hook\nadd-zsh-hook precmd _cl_register\n${END}\n`;
 const bashBlock = (userHome: string, home: string) =>
   `${START}\n${claudeFunction(home)}\n[ -f ${completionPath(userHome, "bash")} ] && . ${completionPath(userHome, "bash")}\n${END}\n`;
 const fishBlock = (home: string) =>
