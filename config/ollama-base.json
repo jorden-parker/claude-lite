@@ -101,6 +101,7 @@
     },
     "filesystem": {
       "allowWrite": ["~/.cache/claude-sandbox"],
+      "allowRead": ["~/.claude/skills"],
       "denyRead": [
         "~/.ssh",
         "~/.aws",

@@ -62,3 +62,9 @@ test("personal settings carry the same hooks as hooks.json", async () => {
 test("launch plan helpers stay internal to the launcher", async () => {
   expect(Object.keys(await import("../src/ollama/launch.ts"))).not.toContain("buildPlan");
 });
+
+test("ollama sandbox can read skills inside the denied ~/.claude", async () => {
+  const { filesystem } = (await Bun.file(join(home, "config", "ollama-base.json")).json()).sandbox;
+  expect(filesystem.denyRead).toContain("~/.claude");
+  expect(filesystem.allowRead).toContain("~/.claude/skills");
+});
