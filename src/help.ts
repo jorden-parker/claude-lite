@@ -1,9 +1,6 @@
 import { HOOK_NAMES } from "./hooks/run-hook.ts";
 
-export const USAGE =
-  "usage: claude-lite hook <name> | ollama [27b|35b] [--print-config] [claude args] | install | update | uninstall | doctor | logs | servers | fix-servers";
-
-export const COMMAND_HELP: Record<string, string> = {
+export const COMMAND_HELP = {
   hook: `usage: claude-lite hook <name>\n  runs one guard hook on the event in stdin; names: ${HOOK_NAMES.join(", ")}`,
   ollama:
     "usage: claude-lite ollama [27b|35b] [--print-config] [claude args]\n  launches claude on a local Ollama model; --print-config prints the Modelfile and settings without launching",
@@ -18,4 +15,9 @@ export const COMMAND_HELP: Record<string, string> = {
     "usage: claude-lite servers\n  lists Ollama startup sources and the port 11434 listener; fails when more than one source would start a server or the server does not respond",
   "fix-servers":
     "usage: claude-lite fix-servers\n  keeps Ollama.app: boots out and moves Ollama LaunchAgents in ~/Library/LaunchAgents to ~/.Trash, then opens Ollama; reports plists that need sudo",
-};
+} as const satisfies Record<string, string>;
+
+const firstLineWithoutPrefix = (help: string) =>
+  help.split("\n")[0].replace("usage: claude-lite ", "");
+
+export const USAGE = `usage: claude-lite ${Object.values(COMMAND_HELP).map(firstLineWithoutPrefix).join(" | ")}`;

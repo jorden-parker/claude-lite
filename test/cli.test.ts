@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { COMMAND_HELP } from "../src/help.ts";
 
 const runCli = (...args: string[]) => Bun.spawnSync(["bun", "src/cli.ts", ...args]);
 
@@ -11,20 +12,14 @@ describe("cli help", () => {
     });
   }
 
-  test("--help lists logs", () => {
-    expect(runCli("--help").stdout.toString()).toContain("logs");
+  test("--help lists every command", () => {
+    const stdout = runCli("--help").stdout.toString();
+    for (const command of Object.keys(COMMAND_HELP)) {
+      expect(stdout).toContain(command);
+    }
   });
 
-  for (const command of [
-    "hook",
-    "ollama",
-    "install",
-    "update",
-    "uninstall",
-    "doctor",
-    "logs",
-    "servers",
-  ]) {
+  for (const command of Object.keys(COMMAND_HELP)) {
     for (const flag of ["--help", "-h"]) {
       test(`${command} ${flag} prints usage without running`, () => {
         const result = runCli(command, flag);

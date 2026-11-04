@@ -3,10 +3,22 @@ import { homedir } from "node:os";
 import { liteHome } from "./home.ts";
 import { COMMAND_HELP, USAGE } from "./help.ts";
 import { runHook } from "./hooks/run-hook.ts";
-import { doctor, fixServers, install, logs, servers, uninstall, update } from "./install.ts";
+import {
+  doctor,
+  fixServers,
+  install,
+  logs,
+  servers,
+  settings,
+  uninstall,
+  update,
+} from "./install.ts";
 import { launch } from "./ollama/launch.ts";
 
-const LIFECYCLE = { install, uninstall, update, doctor, logs, servers, "fix-servers": fixServers };
+const LIFECYCLE: Record<
+  Exclude<keyof typeof COMMAND_HELP, "hook" | "ollama">,
+  (userHome: string, home: string) => Promise<number>
+> = { install, uninstall, update, doctor, logs, servers, "fix-servers": fixServers };
 
 const isHelpFlag = (arg: string | undefined) => arg === "-h" || arg === "--help";
 
@@ -18,7 +30,7 @@ async function main(argv: string[]): Promise<number> {
     return 0;
   }
   if (command && command in COMMAND_HELP && isHelpFlag(rest[0])) {
-    console.log(COMMAND_HELP[command]);
+    console.log(COMMAND_HELP[command as keyof typeof COMMAND_HELP]);
     return 0;
   }
   if (command === "hook" && rest[0]) return await runHook(rest[0]);
