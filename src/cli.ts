@@ -13,6 +13,10 @@ const USAGE =
 async function main(argv: string[]): Promise<number> {
   const [command, ...rest] = argv;
   const home = liteHome();
+  if (command === "-h" || command === "--help" || command === "help") {
+    console.log(USAGE);
+    return 0;
+  }
   if (command === "hook" && rest[0]) return await runHook(rest[0]);
   if (command === "ollama") return await launch(home, rest);
   if (command && command in LIFECYCLE) {
