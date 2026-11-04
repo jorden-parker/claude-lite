@@ -22,7 +22,7 @@
       "allowLocalBinding": true
     },
     "filesystem": {
-      "allowWrite": ["~/.cache/claude-sandbox"],
+      "allowWrite": ["~/.cache/claude-sandbox", "/tmp/claude-skills"],
       "denyRead": [
         "~/.ssh",
         "~/.aws",
@@ -65,6 +65,7 @@
     "PIP_DISABLE_PIP_VERSION_CHECK": "1"
   },
   "permissions": {
+    "additionalDirectories": ["/tmp/claude-skills"],
     "allow": [],
     "deny": [
       "Read(./dist/**)",

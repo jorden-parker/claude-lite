@@ -34,6 +34,7 @@
     "API_TIMEOUT_MS": "1800000"
   },
   "permissions": {
+    "additionalDirectories": ["/tmp/claude-skills"],
     "deny": [
       "Read(./dist/**)",
       "Read(**/.next/**)",
@@ -89,7 +90,7 @@
       "allowLocalBinding": true
     },
     "filesystem": {
-      "allowWrite": ["~/.cache/claude-sandbox"],
+      "allowWrite": ["~/.cache/claude-sandbox", "/tmp/claude-skills"],
       "allowRead": ["~/.claude/skills"],
       "denyRead": [
         "~/.ssh",
