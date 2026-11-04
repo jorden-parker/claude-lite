@@ -1,0 +1,145 @@
+{
+  "apiKeyHelper": "",
+  "disableClaudeAiConnectors": true,
+  "disableBundledSkills": true,
+  "skillListingBudgetFraction": 0.06,
+  "precomputeCompactionEnabled": false,
+  "autoMemoryEnabled": false,
+  "includeGitInstructions": false,
+  "promptSuggestionEnabled": false,
+  "feedbackDrafts": "off",
+  "feedbackSurveyRate": 0,
+  "bashOutputMaxChars": 12000,
+  "env": {
+    "ANTHROPIC_BASE_URL": "http://127.0.0.1:11434",
+    "ANTHROPIC_AUTH_TOKEN": "ollama",
+    "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": "88",
+    "CLAUDE_CODE_FILE_READ_MAX_OUTPUT_TOKENS": "4000",
+    "MAX_MCP_OUTPUT_TOKENS": "2000",
+    "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS": "1",
+    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+    "DISABLE_TELEMETRY": "1",
+    "DO_NOT_TRACK": "1",
+    "DISABLE_ERROR_REPORTING": "1",
+    "DISABLE_AUTOUPDATER": "1",
+    "DISABLE_BUG_COMMAND": "1",
+    "CLAUDE_CODE_DISABLE_FEEDBACK_SURVEY": "1",
+    "CLAUDE_CODE_SEND_FEEDBACK": "0",
+    "CLAUDE_CODE_DISABLE_OFFICIAL_MARKETPLACE_AUTOINSTALL": "1",
+    "CLAUDE_CODE_ENABLE_TELEMETRY": "0",
+    "CLAUDE_CODE_ATTRIBUTION_HEADER": "0",
+    "CLAUDE_CODE_TOTAL_TOKENS_REMINDER": "off",
+    "CLAUDE_CODE_EXTRA_BODY": "{\"thinking\":{\"type\":\"disabled\"}}",
+    "CLAUDE_STREAM_IDLE_TIMEOUT_MS": "1800000",
+    "API_TIMEOUT_MS": "1800000"
+  },
+  "permissions": {
+    "deny": [
+      "Read(**/dist/**)",
+      "Read(**/.next/**)",
+      "Read(**/coverage/**)",
+      "Read(**/*.min.js)",
+      "Read(**/*.map)",
+      "Agent",
+      "Artifact",
+      "CronCreate",
+      "CronDelete",
+      "CronList",
+      "EnterWorktree",
+      "ExitWorktree",
+      "ListAgents",
+      "NotebookEdit",
+      "PushNotification",
+      "RemoteTrigger",
+      "ReportFindings",
+      "ScheduleWakeup",
+      "SendFeedback",
+      "SendMessage",
+      "SendUserFile",
+      "ShareOnboardingGuide",
+      "WebFetch",
+      "WebSearch",
+      "Workflow",
+      "Glob",
+      "Grep"
+    ],
+    "defaultMode": "default",
+    "disableAutoMode": "disable",
+    "ask": [
+      "Bash(git commit *)",
+      "Bash(git push *)",
+      "Bash(dangerouslyDisableSandbox:true)"
+    ],
+    "allow": [
+      "mcp__code-search__semantic_search",
+      "mcp__repo",
+      "mcp__dev__dev_status",
+      "mcp__dev__dev_logs",
+      "mcp__dev__dev_errors",
+      "mcp__dev__dev_deps",
+      "mcp__dev__page_check",
+      "mcp__dev__page_snapshot",
+      "mcp__dev__page_act",
+      "Skill(find-docs)"
+    ]
+  },
+  "sandbox": {
+    "enabled": true,
+    "autoAllowBashIfSandboxed": true,
+    "excludedCommands": [
+      "cmux *",
+      "gh *",
+      "short *",
+      "git push *",
+      "git commit *",
+      "pnpm *"
+    ],
+    "network": {
+      "allowedDomains": [
+        "127.0.0.1",
+        "[::1]",
+        "github.com",
+        "*.github.com",
+        "*.githubusercontent.com",
+        "registry.npmjs.org",
+        "proxy.golang.org",
+        "sum.golang.org",
+        "pypi.org",
+        "files.pythonhosted.org",
+        "context7.com"
+      ],
+      "allowLocalBinding": true
+    },
+    "filesystem": {
+      "allowWrite": [
+        "~/.cache/claude-sandbox"
+      ],
+      "denyRead": [
+        "~/.ssh",
+        "~/.aws",
+        "~/.config/gh",
+        "~/.npmrc",
+        "~/Library/Keychains",
+        "~/.claude",
+        "~/.qwen",
+        "~/.config/context7"
+      ]
+    },
+    "credentials": {
+      "envVars": [
+        {
+          "name": "GH_TOKEN",
+          "mode": "deny"
+        },
+        {
+          "name": "GITHUB_TOKEN",
+          "mode": "deny"
+        },
+        {
+          "name": "SHORTCUT_API_TOKEN",
+          "mode": "deny"
+        }
+      ]
+    }
+  }
+}
