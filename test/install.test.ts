@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import {
+  cpSync,
   existsSync,
   lstatSync,
   mkdirSync,
@@ -12,7 +13,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { install, uninstall, update } from "../src/install.ts";
+import { doctor, install, uninstall, update } from "../src/install.ts";
 
 function fixture() {
   const user = mkdtempSync(join(tmpdir(), "inst-"));
@@ -92,4 +93,36 @@ test("update stops at the first failing step and returns its code", async () => 
   });
   expect(code).toBe(7);
   expect(calls).toHaveLength(2);
+});
+
+async function installedHome() {
+  const user = fixture();
+  const home = mkdtempSync(join(tmpdir(), "lite-"));
+  cpSync(join(import.meta.dir, "..", "config"), join(home, "config"), { recursive: true });
+  mkdirSync(join(home, "dist"));
+  writeFileSync(join(home, "dist", "claude-lite"), "");
+  await install(user, home);
+  return { user, home };
+}
+
+test("doctor passes after install", async () => {
+  const { user, home } = await installedHome();
+  expect(await doctor(user, home, async () => 0)).toBe(0);
+});
+
+test("doctor fails when blocks are missing", async () => {
+  const { user, home } = await installedHome();
+  await uninstall(user, home);
+  expect(await doctor(user, home, async () => 0)).toBe(1);
+});
+
+test("doctor fails when the binary does not run", async () => {
+  const { user, home } = await installedHome();
+  expect(await doctor(user, home, async () => 1)).toBe(1);
+});
+
+test("doctor fails when a config references an unknown hook", async () => {
+  const { user, home } = await installedHome();
+  writeFileSync(join(home, "config", "hooks.json"), '{"command":"x hook nope"}');
+  expect(await doctor(user, home, async () => 0)).toBe(1);
 });

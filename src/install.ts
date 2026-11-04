@@ -10,6 +10,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { dirname, join } from "node:path";
+import { HOOK_NAMES } from "./hooks/run-hook.ts";
 import { type Runner, spawnRunner } from "./ollama/launch.ts";
 
 const START = "# >>> claude-lite >>>";
@@ -111,4 +112,42 @@ export async function update(
     if (code !== 0) return code;
   }
   return 0;
+}
+
+function configsParseWithKnownHooks(home: string): [boolean, boolean] {
+  try {
+    const texts = ["personal-settings.json", "hooks.json"].map((name) =>
+      readFileSync(join(home, "config", name), "utf8"),
+    );
+    texts.forEach((text) => JSON.parse(text));
+    const names = texts.flatMap((text) => [...text.matchAll(/ hook ([\w-]+)/g)].map((m) => m[1]));
+    return [true, names.every((name) => HOOK_NAMES.includes(name))];
+  } catch {
+    return [false, false];
+  }
+}
+
+function blocksInstalled(userHome: string, home: string): boolean {
+  return targets(userHome, home).every(
+    ([path, block]) => existsSync(path) && readFileSync(path, "utf8").includes(block),
+  );
+}
+
+export async function doctor(
+  userHome: string,
+  home: string,
+  run: Runner = spawnRunner,
+): Promise<number> {
+  const binaryBuilt = existsSync(binaryPath(home));
+  const [settingsValid, hooksKnown] = configsParseWithKnownHooks(home);
+  const checks: [string, boolean][] = [
+    ["binary built", binaryBuilt],
+    ["binary runs", binaryBuilt && (await run([binaryPath(home), "--help"])) === 0],
+    ["blocks installed", blocksInstalled(userHome, home)],
+    ["cl link", readLink(clLinkPath(userHome)) === binaryPath(home)],
+    ["settings valid", settingsValid],
+    ["hooks known", hooksKnown],
+  ];
+  for (const [label, ok] of checks) console.log(`${ok ? "ok  " : "FAIL"} ${label}`);
+  return checks.every(([, ok]) => ok) ? 0 : 1;
 }

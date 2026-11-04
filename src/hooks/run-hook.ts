@@ -15,6 +15,8 @@ const HOOKS: Record<string, (event: HookEvent) => HookResult> = {
   "tdd-guard": tddGuard,
 };
 
+export const HOOK_NAMES = Object.keys(HOOKS);
+
 export async function runHook(name: string): Promise<number> {
   const hook = HOOKS[name];
   if (!hook) {

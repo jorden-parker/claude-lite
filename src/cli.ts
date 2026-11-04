@@ -2,13 +2,13 @@
 import { homedir } from "node:os";
 import { liteHome } from "./home.ts";
 import { runHook } from "./hooks/run-hook.ts";
-import { install, uninstall, update } from "./install.ts";
+import { doctor, install, uninstall, update } from "./install.ts";
 import { launch } from "./ollama/launch.ts";
 
-const LIFECYCLE = { install, uninstall, update };
+const LIFECYCLE = { install, uninstall, update, doctor };
 
 const USAGE =
-  "usage: claude-lite hook <name> | ollama [27b|35b] [--print-config] [claude args] | install | update | uninstall";
+  "usage: claude-lite hook <name> | ollama [27b|35b] [--print-config] [claude args] | install | update | uninstall | doctor";
 
 async function main(argv: string[]): Promise<number> {
   const [command, ...rest] = argv;
