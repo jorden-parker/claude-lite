@@ -18,10 +18,11 @@ const COMMAND_HELP: Record<string, string> = {
     "usage: claude-lite install\n  adds the CLAUDE.md @-import, the `claude` rc function and the ~/.local/bin/cl link, backing up each file",
   update: "usage: claude-lite update\n  git pull --ff-only, bun install, build, then install",
   uninstall: "usage: claude-lite uninstall\n  removes only what install added",
-  doctor: "usage: claude-lite doctor\n  checks the build, blocks, link and hook config",
-  logs: "usage: claude-lite logs\n  follows hook decisions and the Ollama server log",
+  doctor:
+    "usage: claude-lite doctor\n  checks the build, blocks, link, hook config, that Ollama responds and has one startup source",
+  logs: "usage: claude-lite logs\n  follows hook decisions and the Ollama logs named in its launchd plists and Ollama.app",
   servers:
-    "usage: claude-lite servers\n  lists Ollama startup sources and the port 11434 listener; fails when more than one source would start a server",
+    "usage: claude-lite servers\n  lists Ollama startup sources and the port 11434 listener; fails when more than one source would start a server or the server does not respond",
 };
 
 const isHelpFlag = (arg: string | undefined) => arg === "-h" || arg === "--help";

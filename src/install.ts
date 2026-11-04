@@ -12,7 +12,7 @@ import {
 } from "node:fs";
 import { dirname, join } from "node:path";
 import { HOOK_NAMES, hookLogPath } from "./hooks/run-hook.ts";
-import { type Runner, spawnRunner } from "./ollama/launch.ts";
+import { type Runner, serverResponds, spawnRunner } from "./ollama/launch.ts";
 
 const START = "# >>> claude-lite >>>";
 const END = "# <<< claude-lite <<<";
@@ -119,6 +119,7 @@ export async function logs(
   userHome: string,
   _home: string,
   run: Runner = spawnRunner,
+  systemRoot = "/",
 ): Promise<number> {
   return await run([
     "tail",
@@ -126,7 +127,7 @@ export async function logs(
     "-n",
     "20",
     hookLogPath(userHome),
-    join(userHome, ".ollama/logs/server.log"),
+    ...ollamaLogPaths(userHome, systemRoot),
   ]);
 }
 
@@ -153,6 +154,7 @@ export async function doctor(
   userHome: string,
   home: string,
   run: Runner = spawnRunner,
+  systemRoot = "/",
 ): Promise<number> {
   const binaryBuilt = existsSync(binaryPath(home));
   const [settingsValid, hooksKnown] = configsParseWithKnownHooks(home);
@@ -163,6 +165,8 @@ export async function doctor(
     ["cl link", readLink(clLinkPath(userHome)) === binaryPath(home)],
     ["settings valid", settingsValid],
     ["hooks known", hooksKnown],
+    ["ollama server responds", await serverResponds(run)],
+    ["one ollama startup source", ollamaStartupSources(userHome, systemRoot).length <= 1],
   ];
   for (const [label, ok] of checks) console.log(`${ok ? "ok  " : "FAIL"} ${label}`);
   return checks.every(([, ok]) => ok) ? 0 : 1;
@@ -180,11 +184,28 @@ function ollamaPlists(root: string): string[] {
   });
 }
 
+const ollamaApps = (userHome: string, systemRoot: string) =>
+  [systemRoot, userHome].map((root) => join(root, "Applications/Ollama.app")).filter(existsSync);
+
+const allOllamaPlists = (userHome: string, systemRoot: string) => [
+  ...ollamaPlists(userHome),
+  ...ollamaPlists(systemRoot),
+];
+
 export function ollamaStartupSources(userHome: string, systemRoot = "/"): string[] {
-  const apps = [systemRoot, userHome]
-    .map((root) => join(root, "Applications/Ollama.app"))
-    .filter(existsSync);
-  return [...ollamaPlists(userHome), ...ollamaPlists(systemRoot), ...apps];
+  return [...allOllamaPlists(userHome, systemRoot), ...ollamaApps(userHome, systemRoot)];
+}
+
+const PLIST_LOG_PATH = /<key>Standard(?:Out|Error)Path<\/key>\s*<string>([^<]+)<\/string>/g;
+
+export function ollamaLogPaths(userHome: string, systemRoot = "/"): string[] {
+  const plistLogs = allOllamaPlists(userHome, systemRoot).flatMap((plist) =>
+    [...readFileSync(plist, "utf8").matchAll(PLIST_LOG_PATH)].map((match) => match[1]),
+  );
+  const appLog = ollamaApps(userHome, systemRoot).length
+    ? [join(userHome, ".ollama/logs/server.log")]
+    : [];
+  return [...new Set([...plistLogs, ...appLog])].filter(existsSync);
 }
 
 export async function servers(
@@ -197,7 +218,10 @@ export async function servers(
   for (const source of sources) console.log(`source ${source}`);
   console.log("listening on 11434:");
   await run(["lsof", "-nP", "-iTCP:11434", "-sTCP:LISTEN"]);
-  if (sources.length <= 1) return 0;
-  console.log("FAIL more than one Ollama startup source; they fight over port 11434. Keep one.");
-  return 1;
+  const responds = await serverResponds(run);
+  console.log(`${responds ? "ok  " : "FAIL"} server responds`);
+  const oneSource = sources.length <= 1;
+  if (!oneSource)
+    console.log("FAIL more than one Ollama startup source; they fight over port 11434. Keep one.");
+  return responds && oneSource ? 0 : 1;
 }
