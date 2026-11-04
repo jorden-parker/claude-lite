@@ -1,1 +1,1 @@
-{ "*.{ts,json}": ["oxlint --fix", "oxfmt"], "*.{md,yml}": "oxfmt" }
+{ "*.{ts,json}": ["oxlint --fix --no-error-on-unmatched-pattern", "oxfmt"], "*.{md,yml}": "oxfmt" }
