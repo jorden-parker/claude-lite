@@ -1,13 +1,15 @@
 import { decide as bashGuard } from "./bash-guard.ts";
 import { decide as bashTrim } from "./bash-trim.ts";
 import { decide as editCheck } from "./edit-check.ts";
+import { decideFallowStop as fallowStop } from "./fallow-stop.ts";
 import { decide as readGuard } from "./read-guard.ts";
 import { decideWithStateFile as tddGuard } from "./tdd-guard.ts";
 import type { HookEvent, HookResult } from "./types.ts";
 
-export const HOOKS: Record<string, (event: HookEvent) => HookResult> = {
+const HOOKS: Record<string, (event: HookEvent) => HookResult> = {
   "bash-guard": bashGuard,
   "bash-trim": bashTrim,
+  "fallow-stop": (event) => fallowStop(event),
   "read-guard": readGuard,
   "edit-check": (event) => editCheck(event),
   "tdd-guard": tddGuard,

@@ -34,5 +34,12 @@
         { "type": "command", "command": "\"$CLAUDE_LITE_HOME\"/dist/claude-lite hook tdd-guard" }
       ]
     }
+  ],
+  "Stop": [
+    {
+      "hooks": [
+        { "type": "command", "command": "\"$CLAUDE_LITE_HOME\"/dist/claude-lite hook fallow-stop" }
+      ]
+    }
   ]
 }

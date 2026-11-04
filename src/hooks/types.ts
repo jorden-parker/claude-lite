@@ -2,6 +2,7 @@ export type HookEvent = {
   hook_event_name?: string;
   session_id?: string;
   cwd?: string;
+  stop_hook_active?: boolean;
   tool_name?: string;
   tool_input?: Record<string, any>;
   tool_response?: Record<string, any>;

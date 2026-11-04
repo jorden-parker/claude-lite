@@ -23,6 +23,9 @@ These rules apply to every project and every language, with no exceptions.
   (enforced by the tdd-guard hook: a code file can be edited only after a test in
   its package was edited and a test command ran)
 - Tests must pass before you finish.
+- TS/JS: Fallow runs before you finish. Fix its findings; use
+  `npx fallow explain <issue-type>` when unclear; remove dead code, never
+  suppress it. (enforced by the fallow-stop hook)
 
 ## Token discipline
 

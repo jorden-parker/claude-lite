@@ -22,6 +22,7 @@ Pulls the base model and creates the `-cc` model when missing, then runs `claude
 - `bash-trim`: keeps head, tail and error lines of long Bash output
 - `read-guard`: denies Reads of files over 300 lines without `limit <= 300`
 - `edit-check`: prettier/eslint/biome (project `node_modules/.bin`), gofmt, ruff, shellcheck; rejects new comments
+- `fallow-stop`: at Stop, when a `.ts/.js` file changed and Fallow is installed, blocks once with up to 15 new findings
 - `tdd-guard`: no code edit until a test in the same scope was edited and a test command ran; third strike passes
   (`CLAUDE_LITE_TDD=0` turns it off; state in `~/.cache/claude-lite/tdd`)
 

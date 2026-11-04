@@ -4,17 +4,24 @@ import { dirname, extname, join, resolve } from "node:path";
 import { EXTENSION_LANGUAGES, newComments } from "./comments.ts";
 import type { HookEvent, HookResult } from "./types.ts";
 
-type Run = (command: string[], cwd: string) => { ok: boolean; output: string } | null;
+export type Run = (
+  command: string[],
+  cwd: string,
+) => { ok: boolean; output: string; status?: number | null } | null;
 
 export const defaultRun: Run = (command, cwd) => {
   const result = spawnSync(command[0], command.slice(1), { cwd, encoding: "utf8" });
   if (result.error) return null;
-  return { ok: result.status === 0, output: `${result.stdout}${result.stderr}` };
+  return {
+    ok: result.status === 0,
+    status: result.status,
+    output: `${result.stdout}${result.stderr}`,
+  };
 };
 
 const onPath = (tool: string) => spawnSync("which", [tool], { encoding: "utf8" }).status === 0;
 
-function nearestDirWith(start: string, names: string[]): string | null {
+export function nearestDirWith(start: string, names: string[]): string | null {
   for (let dir = start; ; dir = dirname(dir)) {
     if (names.some((name) => existsSync(join(dir, name)))) return dir;
     if (dirname(dir) === dir) return null;
