@@ -10,6 +10,7 @@ A small TypeScript + Bun take on claude-custom: guard hooks, an Ollama launcher,
     cl update                    # git pull --ff-only, bun install, build, install
     cl uninstall                 # removes only what install added
     cl doctor                    # checks the build, blocks, link and hook config
+    cl logs                      # follows hook decisions and the Ollama server log
 
 ### Upgrading an older install
 

@@ -13,7 +13,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { doctor, install, uninstall, update } from "../src/install.ts";
+import { doctor, install, logs, uninstall, update } from "../src/install.ts";
 
 function fixture() {
   const user = mkdtempSync(join(tmpdir(), "inst-"));
@@ -125,4 +125,21 @@ test("doctor fails when a config references an unknown hook", async () => {
   const { user, home } = await installedHome();
   writeFileSync(join(home, "config", "hooks.json"), '{"command":"x hook nope"}');
   expect(await doctor(user, home, async () => 0)).toBe(1);
+});
+
+test("logs tails the hook log and the ollama server log", async () => {
+  let seen: string[] = [];
+  const code = await logs("/u", "/lite", async (argv) => {
+    seen = argv;
+    return 7;
+  });
+  expect(seen).toEqual([
+    "tail",
+    "-F",
+    "-n",
+    "20",
+    "/u/.cache/claude-lite/hooks.log",
+    "/u/.ollama/logs/server.log",
+  ]);
+  expect(code).toBe(7);
 });

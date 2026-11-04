@@ -11,6 +11,10 @@ describe("cli help", () => {
     });
   }
 
+  test("--help lists logs", () => {
+    expect(runCli("--help").stdout.toString()).toContain("logs");
+  });
+
   test("unknown command prints usage to stderr and exits 2", () => {
     const result = runCli("bogus");
     expect(result.exitCode).toBe(2);

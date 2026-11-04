@@ -10,7 +10,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { dirname, join } from "node:path";
-import { HOOK_NAMES } from "./hooks/run-hook.ts";
+import { HOOK_NAMES, hookLogPath } from "./hooks/run-hook.ts";
 import { type Runner, spawnRunner } from "./ollama/launch.ts";
 
 const START = "# >>> claude-lite >>>";
@@ -112,6 +112,21 @@ export async function update(
     if (code !== 0) return code;
   }
   return 0;
+}
+
+export async function logs(
+  userHome: string,
+  _home: string,
+  run: Runner = spawnRunner,
+): Promise<number> {
+  return await run([
+    "tail",
+    "-F",
+    "-n",
+    "20",
+    hookLogPath(userHome),
+    join(userHome, ".ollama/logs/server.log"),
+  ]);
 }
 
 function configsParseWithKnownHooks(home: string): [boolean, boolean] {
