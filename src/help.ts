@@ -5,7 +5,7 @@ export const COMMAND_HELP = {
   ollama:
     "usage: claude-lite ollama [27b|35b] [--print-config] [claude args]\n  launches claude on a local Ollama model; --print-config prints the Modelfile and settings without launching",
   install:
-    "usage: claude-lite install\n  adds the CLAUDE.md @-import, the `claude` rc function and the ~/.local/bin/cl link, backing up each file",
+    "usage: claude-lite install\n  adds the CLAUDE.md @-import, the `claude` rc function, the ~/.local/bin/cl link and shell completion for zsh, bash and fish, backing up each file",
   update: "usage: claude-lite update\n  git pull --ff-only, bun install, build, then install",
   uninstall: "usage: claude-lite uninstall\n  removes only what install added",
   doctor:

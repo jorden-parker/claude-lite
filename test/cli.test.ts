@@ -35,6 +35,10 @@ describe("cli help", () => {
     expect(runCli("hook", "--help").stdout.toString()).toContain("bash-guard");
   });
 
+  test("install --help mentions shell completion", () => {
+    expect(runCli("install", "--help").stdout.toString()).toContain("completion");
+  });
+
   test("unknown command prints usage to stderr and exits 2", () => {
     const result = runCli("bogus");
     expect(result.exitCode).toBe(2);
