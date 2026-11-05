@@ -37,11 +37,16 @@ An older binary has no `update` and no `cl`. Run once, then open a new shell; af
 Pulls the base model and creates the `-cc` model when missing, then runs `claude` with generated settings,
 `config/system-prompt.md` and `Agent` denied. Sizes live in `config/sizes.json`.
 
-Thinking is off for every size by default. Later settings win:
+Each size sets thinking, effort, permissions and sandbox. Later layers win:
 
-1. `config/sizes.json`: `"thinking"` per size, plus an optional `"effort"` (a claude effort level such as `low` or `xhigh`)
-2. `config/local-sizes.json` (gitignored, survives `cl update`): your overrides, e.g. `{"27b": {"thinking": true, "effort": "low"}}`
-3. `--think` / `--no-think` for one launch; claude's own `--effort <level>` sets effort for one launch
+| Setting     | `config/sizes.json` | `config/local-sizes.json` | Env var                                   | Flag                                 |
+| ----------- | ------------------- | ------------------------- | ----------------------------------------- | ------------------------------------ |
+| thinking    | `false`             | ✓                         | `CLAUDE_LITE_THINKING=on\|off`            | `--think` / `--no-think`             |
+| effort      | unset               | ✓                         | `CLAUDE_LITE_EFFORT=<level>`              | claude's own `--effort <level>`      |
+| permissions | `true`              | ✓                         | `CLAUDE_LITE_NO_PERMISSIONS=ollama` → off | `--permissions` / `--no-permissions` |
+| sandbox     | `true`              | ✓                         | `CLAUDE_LITE_NO_SANDBOX=ollama` → off     | `--sandbox` / `--no-sandbox`         |
+
+`config/local-sizes.json` is gitignored and survives `cl update`, e.g. `{"27b": {"thinking": true, "effort": "low", "sandbox": false}}`. Add `--print-config` to see the resulting Modelfile and settings without launching.
 
 Needs Ollama ≥ 0.40.12. MLX runs one request at a time, so two sessions on one model take turns; switching sizes reloads the model and clears its prompt cache (`cl servers` sets `OLLAMA_MAX_LOADED_MODELS=1`).
 
@@ -61,10 +66,12 @@ Decisions log to `~/.cache/claude-lite/hooks.log` (followed by `cl logs`).
 
 | Variable                     | Purpose                                                                                                                                 | Required                                                                             | Default                                                                          |
 | ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
+| `CLAUDE_LITE_EFFORT`         | Effort level for `cl ollama` (such as `low` or `xhigh`); claude's `--effort` overrides it                                               | Optional                                                                             | The size's `effort`, else unset                                                  |
 | `CLAUDE_LITE_HOME`           | The claude-lite checkout that hook commands and config paths resolve against; the `claude` rc function and `cl ollama` set it on launch | Optional when you run `cl` yourself; hook commands need it, and the launchers set it | The checkout containing the binary (`dist/..`), or the repo when run from source |
-| `CLAUDE_LITE_NO_PERMISSIONS` | Comma list of launch paths (`anthropic`, `ollama`) that omit the `permissions` block                                                    | Optional                                                                             | Unset, so the block is kept                                                      |
-| `CLAUDE_LITE_NO_SANDBOX`     | Comma list of launch paths (`anthropic`, `ollama`) that omit the `sandbox` block                                                        | Optional                                                                             | Unset, so the block is kept                                                      |
+| `CLAUDE_LITE_NO_PERMISSIONS` | Comma list of launch paths (`anthropic`, `ollama`) that omit the `permissions` block; `cl ollama --permissions` overrides it            | Optional                                                                             | Unset, so the block is kept                                                      |
+| `CLAUDE_LITE_NO_SANDBOX`     | Comma list of launch paths (`anthropic`, `ollama`) that omit the `sandbox` block; `cl ollama --sandbox` overrides it                    | Optional                                                                             | Unset, so the block is kept                                                      |
 | `CLAUDE_LITE_TDD`            | `0` turns off tdd-guard                                                                                                                 | Optional                                                                             | Unset, so tdd-guard is on                                                        |
+| `CLAUDE_LITE_THINKING`       | `on` or `off` sets thinking for `cl ollama`; `--think`/`--no-think` override it                                                         | Optional                                                                             | The size's `thinking`                                                            |
 | `CLAUDE_LITE_STATE_DIR`      | Where tdd-guard keeps its per-session state                                                                                             | Optional                                                                             | `~/.cache/claude-lite/tdd`                                                       |
 | `HOME`                       | The user home for install targets and `hooks.log`                                                                                       | Optional                                                                             | `os.homedir()`                                                                   |
 | `PATH`                       | `install` warns when `~/.local/bin` is missing from it                                                                                  | Optional                                                                             | Empty, so you get the warning                                                    |
