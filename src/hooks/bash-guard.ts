@@ -1,10 +1,10 @@
 import { deny, type HookEvent, type HookResult } from "./types.ts";
 
-const COMMAND_START = String.raw`(?:^|[;&|(\n\`]\s*)`;
+export const COMMAND_START = String.raw`(?:^|[;&|(\n\`]\s*)`;
 const SEGMENT_BODY = String.raw`[^;&|)\n\`]*`;
 const BOUNDED_FILTER = String.raw`\|\s*(?:head|tail|wc|grep|sed\s+-n)\b`;
 const NOT_BOUNDED = `(?!${SEGMENT_BODY}${BOUNDED_FILTER})`;
-const GIT_OPTIONS = String.raw`(?:(?:--no-pager|--paginate|-p|-P|-c\s+\S+|-C\s+\S+|--git-dir=\S+|--work-tree=\S+)\s+)*`;
+export const GIT_OPTIONS = String.raw`(?:(?:--no-pager|--paginate|-p|-P|-c\s+\S+|-C\s+\S+|--git-dir=\S+|--work-tree=\S+)\s+)*`;
 const QUOTED_TEXT = /'[^']*'|"(?:[^"\\$`]|\\.)*"/g;
 const QUOTED_SEPARATOR = /[;&|()\n`]/;
 const LOCKFILES = [

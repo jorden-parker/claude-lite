@@ -3,7 +3,12 @@
     {
       "matcher": "Bash",
       "hooks": [
-        { "type": "command", "command": "\"$CLAUDE_LITE_HOME\"/dist/claude-lite hook bash-guard" }
+        { "type": "command", "command": "\"$CLAUDE_LITE_HOME\"/dist/claude-lite hook bash-guard" },
+        {
+          "type": "command",
+          "command": "\"$CLAUDE_LITE_HOME\"/dist/claude-lite hook commit-guard",
+          "timeout": 600
+        }
       ]
     },
     {

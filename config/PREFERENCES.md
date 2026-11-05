@@ -27,6 +27,22 @@ These rules apply to every project and every language, with no exceptions.
   `npx fallow explain <issue-type>` when unclear; remove dead code, never
   suppress it. (enforced by the fallow-stop hook)
 
+## Before committing
+
+- Find the checks: CLAUDE.md/README commands, `package.json` scripts, Makefile,
+  CI workflows. Run them fast to slow: lint, typecheck, tests, build.
+- Dev server: reuse a running one, or start it in the background. Wait until it
+  serves, request the pages or endpoints you changed, grep its log for errors,
+  and stop it if you started it.
+- Next.js 16+: reuse the server in `.next/dev/lock`. Check
+  `get_compilation_issues`, and with the page open in a browser, `get_errors`
+  through `/_next/mcp` (next-devtools-mcp, or curl). Also run
+  `next typegen && tsc --noEmit`.
+- On failure, fix it and re-run all the checks, up to 3 rounds. Then stop and
+  report the command and its output. Never commit with a failing check, never
+  use `--no-verify`, and never skip or delete tests. (enforced by the
+  commit-guard hook)
+
 ## Token discipline
 
 - Grep/Glob before Read. Read only the line range you need.
