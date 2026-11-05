@@ -1,9 +1,9 @@
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { withOptOutsFor } from "../permissions-opt-out.ts";
 import { renderModelfile } from "./modelfile.ts";
 import { renderSettings } from "./settings.ts";
+import { applyEnv, applyFlags } from "./size-overrides.ts";
 import { DEFAULT_SIZE, loadSizes, pickSize } from "./sizes.ts";
 
 export type Runner = (argv: string[], env?: Record<string, string | undefined>) => Promise<number>;
@@ -13,7 +13,6 @@ export const spawnRunner: Runner = async (argv, env) =>
     .exited;
 
 const TOOLS = "Bash,Read,Edit,Write,Skill";
-const THINK_FLAGS = new Set(["--think", "--no-think"]);
 const OLLAMA_URL = "http://localhost:11434";
 
 export const serverResponds = async (run: Runner) =>
@@ -33,15 +32,12 @@ function buildPlan(home: string, args: string[]) {
   const isSize = first !== undefined && Object.hasOwn(sizes, first);
   const sizeName = isSize ? first : DEFAULT_SIZE;
   const sizeArgs = isSize ? rest : args;
-  const claudeArgs = sizeArgs.filter((a) => !THINK_FLAGS.has(a));
-  const thinkFlag = sizeArgs.findLast((a) => THINK_FLAGS.has(a));
-  const configured = pickSize(sizes, sizeName);
-  const size = thinkFlag ? { ...configured, thinking: thinkFlag === "--think" } : configured;
-  const read = (name: string) => JSON.parse(readFileSync(join(home, "config", name), "utf8"));
-  const settings = withOptOutsFor(
-    "ollama",
-    renderSettings(read("ollama-base.json"), read("hooks.json"), size),
+  const { size, claudeArgs } = applyFlags(
+    applyEnv(pickSize(sizes, sizeName), process.env),
+    sizeArgs,
   );
+  const read = (name: string) => JSON.parse(readFileSync(join(home, "config", name), "utf8"));
+  const settings = renderSettings(read("ollama-base.json"), read("hooks.json"), size);
   return { size, settings, modelfile: renderModelfile(size), claudeArgs };
 }
 

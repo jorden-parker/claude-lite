@@ -3,8 +3,10 @@ import type { Size } from "./sizes.ts";
 export function renderSettings(base: Record<string, any>, hooks: unknown, size: Size) {
   const model = size.model;
   const { CLAUDE_CODE_EXTRA_BODY: _baseBody, ...baseEnv } = base.env ?? {};
+  const { sandbox, permissions: _basePermissions, ...baseRest } = base;
   return {
-    ...base,
+    ...baseRest,
+    ...(size.sandbox && sandbox !== undefined && { sandbox }),
     model,
     availableModels: [model],
     ...(size.effort && { effortLevel: size.effort }),
@@ -19,10 +21,12 @@ export function renderSettings(base: Record<string, any>, hooks: unknown, size: 
         CLAUDE_CODE_EXTRA_BODY: JSON.stringify({ thinking: { type: "disabled" } }),
       }),
     },
-    permissions: {
-      ...base.permissions,
-      deny: [...new Set([...(base.permissions?.deny ?? []), "Agent"])],
-    },
+    ...(size.permissions && {
+      permissions: {
+        ...base.permissions,
+        deny: [...new Set([...(base.permissions?.deny ?? []), "Agent"])],
+      },
+    }),
     hooks,
   };
 }

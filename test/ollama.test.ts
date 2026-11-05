@@ -28,6 +28,8 @@ test("modelfile has base and parameters", () => {
     output_tokens: 10,
     parameters: { top_k: 20 },
     thinking: false,
+    permissions: true,
+    sandbox: true,
   });
   expect(text).toBe(
     "FROM b\nPARAMETER num_ctx 100\nPARAMETER num_predict 10\nPARAMETER top_k 20\n",
@@ -120,6 +122,8 @@ const sizeWith = (overrides: Partial<Size>): Size => ({
   output_tokens: 10,
   parameters: {},
   thinking: false,
+  permissions: true,
+  sandbox: true,
   ...overrides,
 });
 const disabledBody = JSON.stringify({ thinking: { type: "disabled" } });
@@ -172,4 +176,25 @@ test("--no-think turns thinking off and is not passed to claude", async () => {
   expect(claude).not.toContain("--no-think");
   const written = await Bun.file(claude[claude.indexOf("--settings") + 1]).json();
   expect(written.env.CLAUDE_CODE_EXTRA_BODY).toBe(disabledBody);
+});
+
+test("renderSettings leaves out permissions or sandbox when the size turns it off", () => {
+  const base = { sandbox: { enabled: true }, permissions: { deny: ["x"] } };
+  const noPermissions = renderSettings(base, {}, sizeWith({ permissions: false }));
+  expect(noPermissions.permissions).toBeUndefined();
+  expect(noPermissions.sandbox).toEqual(base.sandbox);
+  const noSandbox = renderSettings(base, {}, sizeWith({ sandbox: false }));
+  expect(noSandbox.sandbox).toBeUndefined();
+  expect(noSandbox.permissions?.deny).toContain("Agent");
+});
+
+test("--no-sandbox --no-permissions writes neither block and passes neither flag", async () => {
+  const { calls, run } = recorder(false);
+  await launch(home, ["27b", "--no-sandbox", "--no-permissions"], run);
+  const claude = calls.at(-1)!;
+  expect(claude).not.toContain("--no-sandbox");
+  expect(claude).not.toContain("--no-permissions");
+  const written = await Bun.file(claude[claude.indexOf("--settings") + 1]).json();
+  expect(written.sandbox).toBeUndefined();
+  expect(written.permissions).toBeUndefined();
 });

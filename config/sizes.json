@@ -5,6 +5,8 @@
     "context": 65536,
     "output_tokens": 8192,
     "thinking": false,
+    "permissions": true,
+    "sandbox": true,
     "parameters": {
       "temperature": 0.7,
       "top_k": 20,
@@ -17,6 +19,8 @@
     "context": 65536,
     "output_tokens": 8192,
     "thinking": false,
+    "permissions": true,
+    "sandbox": true,
     "parameters": {
       "temperature": 0.6,
       "top_k": 20,

@@ -21,6 +21,10 @@ test.each(shells)("%s script lists every word", (shell) => {
     "--print-config",
     "--think",
     "--no-think",
+    "--permissions",
+    "--no-permissions",
+    "--sandbox",
+    "--no-sandbox",
     "--help",
   ];
   for (const word of expected) expect(script).toContain(word);

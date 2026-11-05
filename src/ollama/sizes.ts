@@ -9,6 +9,8 @@ export type Size = {
   output_tokens: number;
   parameters: Record<string, number>;
   thinking: boolean;
+  permissions: boolean;
+  sandbox: boolean;
   effort?: string;
 };
 

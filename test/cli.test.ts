@@ -45,3 +45,16 @@ describe("cli help", () => {
     expect(result.stderr.toString()).toContain("usage: claude-lite");
   });
 });
+
+test("ollama help lists every ollama flag", () => {
+  const flags = [
+    "--print-config",
+    "--think",
+    "--no-think",
+    "--permissions",
+    "--no-permissions",
+    "--sandbox",
+    "--no-sandbox",
+  ];
+  for (const flag of flags) expect(COMMAND_HELP.ollama).toContain(flag);
+});
