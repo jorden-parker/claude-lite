@@ -3,7 +3,7 @@ import { HOOK_NAMES } from "./hooks/run-hook.ts";
 export const COMMAND_HELP = {
   hook: `usage: claude-lite hook <name>\n  runs one guard hook on the event in stdin; names: ${HOOK_NAMES.join(", ")}`,
   ollama:
-    "usage: claude-lite ollama [27b|35b] [--print-config] [claude args]\n  launches claude on a local Ollama model; --print-config prints the Modelfile and settings without launching\n  CLAUDE_LITE_NO_PERMISSIONS=ollama omits the permissions block; CLAUDE_LITE_NO_SANDBOX=ollama omits the sandbox block",
+    "usage: claude-lite ollama [27b|35b] [--print-config] [--think|--no-think] [claude args]\n  launches claude on a local Ollama model; --print-config prints the Modelfile and settings without launching\n  --think/--no-think override the size's thinking for one launch; claude's --effort <level> sets effort for one launch; config/local-sizes.json keeps per-size thinking and effort\n  CLAUDE_LITE_NO_PERMISSIONS=ollama omits the permissions block; CLAUDE_LITE_NO_SANDBOX=ollama omits the sandbox block",
   install:
     "usage: claude-lite install\n  adds the CLAUDE.md @-import, the `claude` rc function, the ~/.local/bin/cl link and shell completion for zsh, bash and fish, backing up each file",
   build: "usage: claude-lite build\n  compiles src/cli.ts to dist/claude-lite in the lite home",

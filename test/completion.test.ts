@@ -14,7 +14,15 @@ const syntaxCheck = { zsh: ["zsh", "-n"], bash: ["bash", "-n"], fish: ["fish", "
 
 test.each(shells)("%s script lists every word", (shell) => {
   const script = completionScript(shell, words);
-  const expected = [...words.commands, ...words.hooks, ...words.sizes, "--print-config", "--help"];
+  const expected = [
+    ...words.commands,
+    ...words.hooks,
+    ...words.sizes,
+    "--print-config",
+    "--think",
+    "--no-think",
+    "--help",
+  ];
   for (const word of expected) expect(script).toContain(word);
 });
 

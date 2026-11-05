@@ -1,7 +1,11 @@
 import { expect, test } from "bun:test";
+import { copyFileSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { launch, type Runner } from "../src/ollama/launch.ts";
 import { renderModelfile } from "../src/ollama/modelfile.ts";
+import { renderSettings } from "../src/ollama/settings.ts";
+import { loadSizes, type Size } from "../src/ollama/sizes.ts";
 
 const home = join(import.meta.dir, "..");
 const recorder = (failShow: boolean, failCurl = false) => {
@@ -23,6 +27,7 @@ test("modelfile has base and parameters", () => {
     context: 100,
     output_tokens: 10,
     parameters: { top_k: 20 },
+    thinking: false,
   });
   expect(text).toBe(
     "FROM b\nPARAMETER num_ctx 100\nPARAMETER num_predict 10\nPARAMETER top_k 20\n",
@@ -106,4 +111,65 @@ test("CLAUDE_LITE_NO_SANDBOX=ollama drops sandbox and keeps permissions", async 
 test("CLAUDE_LITE_NO_PERMISSIONS=anthropic keeps the ollama Agent deny", async () => {
   const written = await writtenSettings("CLAUDE_LITE_NO_PERMISSIONS", "anthropic");
   expect(written.permissions.deny).toContain("Agent");
+});
+
+const sizeWith = (overrides: Partial<Size>): Size => ({
+  base: "b",
+  model: "m",
+  context: 100,
+  output_tokens: 10,
+  parameters: {},
+  thinking: false,
+  ...overrides,
+});
+const disabledBody = JSON.stringify({ thinking: { type: "disabled" } });
+
+test("thinking off sends the disabled body and no effort", () => {
+  const settings = renderSettings({ env: {} }, {}, sizeWith({ thinking: false }));
+  expect(settings.env.CLAUDE_CODE_EXTRA_BODY).toBe(disabledBody);
+  expect(settings.effortLevel).toBeUndefined();
+});
+
+test("thinking on drops the base body and sets the effort", () => {
+  const base = { env: { CLAUDE_CODE_EXTRA_BODY: disabledBody } };
+  const settings = renderSettings(base, {}, sizeWith({ thinking: true, effort: "low" }));
+  expect(settings.env.CLAUDE_CODE_EXTRA_BODY).toBeUndefined();
+  expect(settings.effortLevel).toBe("low");
+});
+
+function homeWithLocalSizes(localSizes: string) {
+  const tempHome = mkdtempSync(join(tmpdir(), "claude-lite-sizes-"));
+  mkdirSync(join(tempHome, "config"));
+  copyFileSync(join(home, "config", "sizes.json"), join(tempHome, "config", "sizes.json"));
+  writeFileSync(join(tempHome, "config", "local-sizes.json"), localSizes);
+  return tempHome;
+}
+
+test("local-sizes.json overrides one field of one size", () => {
+  const sizes = loadSizes(homeWithLocalSizes(JSON.stringify({ "27b": { thinking: true } })));
+  expect(sizes["27b"].thinking).toBe(true);
+  expect(sizes["27b"].model).toBe("qwen3.8-27b-dflash-cc");
+  expect(sizes["35b"].thinking).toBe(false);
+});
+
+test("invalid local-sizes.json is ignored", () => {
+  expect(loadSizes(homeWithLocalSizes("{not json"))).toEqual(loadSizes(home));
+});
+
+test("--think turns thinking on and is not passed to claude", async () => {
+  const { calls, run } = recorder(false);
+  await launch(home, ["27b", "--think", "-p", "hi"], run);
+  const claude = calls.at(-1)!;
+  expect(claude).not.toContain("--think");
+  const written = await Bun.file(claude[claude.indexOf("--settings") + 1]).json();
+  expect(written.env.CLAUDE_CODE_EXTRA_BODY).toBeUndefined();
+});
+
+test("--no-think turns thinking off and is not passed to claude", async () => {
+  const { calls, run } = recorder(false);
+  await launch(home, ["27b", "--no-think"], run);
+  const claude = calls.at(-1)!;
+  expect(claude).not.toContain("--no-think");
+  const written = await Bun.file(claude[claude.indexOf("--settings") + 1]).json();
+  expect(written.env.CLAUDE_CODE_EXTRA_BODY).toBe(disabledBody);
 });

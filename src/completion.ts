@@ -14,7 +14,7 @@ const zshBody = ({ commands, hooks, sizes }: CompletionWords) => `_cl() {
   elif (( CURRENT == 3 )); then
     case $words[2] in
       hook) compadd -- ${list(hooks)} --help ;;
-      ollama) compadd -- ${list(sizes)} --print-config --help ;;
+      ollama) compadd -- ${list(sizes)} --print-config --think --no-think --help ;;
       *) compadd -- --help ;;
     esac
   fi
@@ -27,7 +27,7 @@ const bashBody = ({ commands, hooks, sizes }: CompletionWords) => `_cl() {
   elif (( COMP_CWORD == 2 )); then
     case \${COMP_WORDS[1]} in
       hook) COMPREPLY=($(compgen -W "${list(hooks)} --help" -- "$current")) ;;
-      ollama) COMPREPLY=($(compgen -W "${list(sizes)} --print-config --help" -- "$current")) ;;
+      ollama) COMPREPLY=($(compgen -W "${list(sizes)} --print-config --think --no-think --help" -- "$current")) ;;
       *) COMPREPLY=($(compgen -W "--help" -- "$current")) ;;
     esac
   fi
@@ -40,7 +40,7 @@ const fishBody = ({ commands, hooks, sizes }: CompletionWords) =>
     `complete -c cl -n '__fish_use_subcommand' -a '${list(commands)}'`,
     `complete -c cl -n '__fish_seen_subcommand_from ${list(commands)}' -a '--help'`,
     `complete -c cl -n '__fish_seen_subcommand_from hook' -a '${list(hooks)}'`,
-    `complete -c cl -n '__fish_seen_subcommand_from ollama' -a '${list(sizes)} --print-config'`,
+    `complete -c cl -n '__fish_seen_subcommand_from ollama' -a '${list(sizes)} --print-config --think --no-think'`,
   ].join("\n");
 
 export function completionScript(shell: Shell, words: CompletionWords): string {

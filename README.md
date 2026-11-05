@@ -35,7 +35,13 @@ An older binary has no `update` and no `cl`. Run once, then open a new shell; af
     claude-lite ollama --print-config 27b   # print Modelfile + settings, no launch
 
 Pulls the base model and creates the `-cc` model when missing, then runs `claude` with generated settings,
-`config/system-prompt.md`, thinking disabled and `Agent` denied. Sizes live in `config/sizes.json`.
+`config/system-prompt.md` and `Agent` denied. Sizes live in `config/sizes.json`.
+
+Thinking is off for every size by default. Later settings win:
+
+1. `config/sizes.json`: `"thinking"` per size, plus an optional `"effort"` (a claude effort level such as `low` or `xhigh`)
+2. `config/local-sizes.json` (gitignored, survives `cl update`): your overrides, e.g. `{"27b": {"thinking": true, "effort": "low"}}`
+3. `--think` / `--no-think` for one launch; claude's own `--effort <level>` sets effort for one launch
 
 Needs Ollama ≥ 0.40.12. MLX runs one request at a time, so two sessions on one model take turns; switching sizes reloads the model and clears its prompt cache (`cl servers` sets `OLLAMA_MAX_LOADED_MODELS=1`).
 

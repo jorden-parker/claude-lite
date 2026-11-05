@@ -13,6 +13,7 @@ export const spawnRunner: Runner = async (argv, env) =>
     .exited;
 
 const TOOLS = "Bash,Read,Edit,Write,Skill";
+const THINK_FLAGS = new Set(["--think", "--no-think"]);
 const OLLAMA_URL = "http://localhost:11434";
 
 export const serverResponds = async (run: Runner) =>
@@ -31,8 +32,11 @@ function buildPlan(home: string, args: string[]) {
   const [first, ...rest] = args;
   const isSize = first !== undefined && Object.hasOwn(sizes, first);
   const sizeName = isSize ? first : DEFAULT_SIZE;
-  const claudeArgs = isSize ? rest : args;
-  const size = pickSize(sizes, sizeName);
+  const sizeArgs = isSize ? rest : args;
+  const claudeArgs = sizeArgs.filter((a) => !THINK_FLAGS.has(a));
+  const thinkFlag = sizeArgs.findLast((a) => THINK_FLAGS.has(a));
+  const configured = pickSize(sizes, sizeName);
+  const size = thinkFlag ? { ...configured, thinking: thinkFlag === "--think" } : configured;
   const read = (name: string) => JSON.parse(readFileSync(join(home, "config", name), "utf8"));
   const settings = withOptOutsFor(
     "ollama",
