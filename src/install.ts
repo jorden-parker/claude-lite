@@ -16,6 +16,7 @@ import { completionPath, completionScript, END, type Shell, START } from "./comp
 import { COMMAND_HELP } from "./help.ts";
 import { HOOK_NAMES, hookLogPath } from "./hooks/run-hook.ts";
 import { type Runner, serverResponds, spawnRunner } from "./ollama/launch.ts";
+import { withJsonOverlay } from "./json-overlay.ts";
 import { withOptOutsFor } from "./permissions-opt-out.ts";
 import { loadSizes } from "./ollama/sizes.ts";
 
@@ -330,34 +331,9 @@ export async function fixServers(
   return needSudo.length ? 1 : 0;
 }
 
-type JsonObject = Record<string, unknown>;
-
-const isJsonObject = (value: unknown): value is JsonObject =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
-export function mergeSettings(base: JsonObject, overlay: JsonObject): JsonObject {
-  const merged: JsonObject = { ...base };
-  for (const [key, overlayValue] of Object.entries(overlay)) {
-    const baseValue = merged[key];
-    merged[key] =
-      isJsonObject(baseValue) && isJsonObject(overlayValue)
-        ? mergeSettings(baseValue, overlayValue)
-        : overlayValue;
-  }
-  return merged;
-}
-
 export async function settings(_userHome: string, home: string): Promise<number> {
   const base = JSON.parse(readFileSync(join(home, "config", "personal-settings.json"), "utf8"));
-  const overlayPath = join(home, "config", "local-settings.json");
-  let effective = base;
-  if (existsSync(overlayPath)) {
-    try {
-      effective = mergeSettings(base, JSON.parse(readFileSync(overlayPath, "utf8")));
-    } catch (error) {
-      console.error(`claude-lite: ignoring invalid ${overlayPath}: ${(error as Error).message}`);
-    }
-  }
+  const effective = withJsonOverlay(base, join(home, "config", "local-settings.json"));
   console.log(JSON.stringify(withOptOutsFor("anthropic", effective)));
   return 0;
 }

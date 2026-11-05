@@ -2,7 +2,8 @@ import { expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { mergeSettings, settings } from "../src/install.ts";
+import { mergeSettings } from "../src/json-overlay.ts";
+import { settings } from "../src/install.ts";
 
 function liteHomeWith(base: object, overlay?: string) {
   const home = mkdtempSync(join(tmpdir(), "settings-"));
