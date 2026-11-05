@@ -37,9 +37,10 @@ An older binary has no `update` and no `cl`. Run once, then open a new shell; af
 
 - `--print-config`: print the Modelfile and settings instead of launching
 - `--think` / `--no-think`: turn thinking on or off for this launch
+- `--effort <level>`: thinking effort sent to the model; needs thinking on. Qwen3.8 accepts `low`, `medium` or `xhigh` (`high` and `max` fall back to `medium`); Qwen3.6 only does on/off
 - `--permissions` / `--no-permissions`: keep or omit claude-lite's `permissions` block (including the `Agent` deny) for this launch; `~/.claude/settings.json` rules still apply
 - `--sandbox` / `--no-sandbox`: keep or omit the `sandbox` block for this launch
-- Every other argument, such as `--effort <level>` or `-p`, passes through to `claude`
+- Every other argument, such as `-p`, passes through to `claude`
 
 Pulls the base model and creates the `-cc` model when missing, then runs `claude` with generated settings,
 `config/system-prompt.md` and `Agent` denied. Sizes live in `config/sizes.json`.
@@ -49,7 +50,7 @@ Each size sets thinking, effort, permissions and sandbox. Later layers win:
 | Setting     | `config/sizes.json` | `config/local-sizes.json` | Env var                                   | Flag                                 |
 | ----------- | ------------------- | ------------------------- | ----------------------------------------- | ------------------------------------ |
 | thinking    | `false`             | ✓                         | `CLAUDE_LITE_THINKING=on\|off`            | `--think` / `--no-think`             |
-| effort      | unset               | ✓                         | `CLAUDE_LITE_EFFORT=<level>`              | claude's own `--effort <level>`      |
+| effort      | unset               | ✓                         | `CLAUDE_LITE_EFFORT=<level>`              | `--effort <level>`                   |
 | permissions | `true`              | ✓                         | `CLAUDE_LITE_NO_PERMISSIONS=ollama` → off | `--permissions` / `--no-permissions` |
 | sandbox     | `true`              | ✓                         | `CLAUDE_LITE_NO_SANDBOX=ollama` → off     | `--sandbox` / `--no-sandbox`         |
 
@@ -73,7 +74,7 @@ Decisions log to `~/.cache/claude-lite/hooks.log` (followed by `cl logs`).
 
 | Variable                     | Purpose                                                                                                                                                                              | Required                                                                             | Default                                                                          |
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
-| `CLAUDE_LITE_EFFORT`         | Effort level for `cl ollama` (such as `low` or `xhigh`); claude's `--effort` overrides it                                                                                            | Optional                                                                             | The size's `effort`, else unset                                                  |
+| `CLAUDE_LITE_EFFORT`         | Effort level for `cl ollama` (`low`, `medium` or `xhigh` on Qwen3.8; needs thinking on); `--effort` overrides it                                                                     | Optional                                                                             | The size's `effort`, else unset                                                  |
 | `CLAUDE_LITE_HOME`           | The claude-lite checkout that hook commands and config paths resolve against; the `claude` rc function and `cl ollama` set it on launch                                              | Optional when you run `cl` yourself; hook commands need it, and the launchers set it | The checkout containing the binary (`dist/..`), or the repo when run from source |
 | `CLAUDE_LITE_NO_PERMISSIONS` | Comma list of launch paths (`anthropic`, `ollama`) that omit claude-lite's `permissions` block (`~/.claude/settings.json` rules still apply); `cl ollama --permissions` overrides it | Optional                                                                             | Unset, so the block is kept                                                      |
 | `CLAUDE_LITE_NO_SANDBOX`     | Comma list of launch paths (`anthropic`, `ollama`) that omit the `sandbox` block; `cl ollama --sandbox` overrides it                                                                 | Optional                                                                             | Unset, so the block is kept                                                      |

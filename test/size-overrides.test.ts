@@ -66,3 +66,17 @@ test("a flag beats the env", () => {
   const fromEnv = applyEnv(size, { CLAUDE_LITE_NO_PERMISSIONS: "ollama" });
   expect(applyFlags(fromEnv, ["--permissions"]).size.permissions).toBe(true);
 });
+
+test.each([[["--effort", "low"]], [["--effort=low"]]])(
+  "%j sets effort and is not passed to claude",
+  (effortArgs) => {
+    const result = applyFlags(size, ["-p", ...effortArgs, "hi"]);
+    expect(result.size.effort).toBe("low");
+    expect(result.claudeArgs).toEqual(["-p", "hi"]);
+  },
+);
+
+test("--effort beats CLAUDE_LITE_EFFORT", () => {
+  const fromEnv = applyEnv(size, { CLAUDE_LITE_EFFORT: "xhigh" });
+  expect(applyFlags(fromEnv, ["--effort", "low"]).size.effort).toBe("low");
+});

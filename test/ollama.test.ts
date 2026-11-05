@@ -134,11 +134,19 @@ test("thinking off sends the disabled body and no effort", () => {
   expect(settings.effortLevel).toBeUndefined();
 });
 
-test("thinking on drops the base body and sets the effort", () => {
+test("thinking on with an effort sends it as output_config", () => {
   const base = { env: { CLAUDE_CODE_EXTRA_BODY: disabledBody } };
   const settings = renderSettings(base, {}, sizeWith({ thinking: true, effort: "low" }));
-  expect(settings.env.CLAUDE_CODE_EXTRA_BODY).toBeUndefined();
+  expect(settings.env.CLAUDE_CODE_EXTRA_BODY).toBe(
+    JSON.stringify({ output_config: { effort: "low" } }),
+  );
   expect(settings.effortLevel).toBe("low");
+});
+
+test("thinking on without an effort drops the base body", () => {
+  const base = { env: { CLAUDE_CODE_EXTRA_BODY: disabledBody } };
+  const settings = renderSettings(base, {}, sizeWith({ thinking: true }));
+  expect(settings.env.CLAUDE_CODE_EXTRA_BODY).toBeUndefined();
 });
 
 function homeWithLocalSizes(localSizes: string) {

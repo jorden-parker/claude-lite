@@ -26,10 +26,25 @@ export function applyEnv(size: Size, env: Env): Size {
   };
 }
 
+const EFFORT_FLAG = /^--effort(?:=(.*))?$/;
+
+function takeEffort(args: string[]) {
+  const claudeArgs: string[] = [];
+  let effort: string | undefined;
+  for (let index = 0; index < args.length; index++) {
+    const match = EFFORT_FLAG.exec(args[index]);
+    if (!match) claudeArgs.push(args[index]);
+    else if (match[1] !== undefined) effort = match[1];
+    else effort = args[++index];
+  }
+  return { effort, claudeArgs };
+}
+
 export function applyFlags(size: Size, args: string[]): { size: Size; claudeArgs: string[] } {
-  const switches = args.filter((arg) => Object.hasOwn(FLAGS, arg)).map((arg) => FLAGS[arg]);
+  const { effort, claudeArgs } = takeEffort(args);
+  const switches = claudeArgs.filter((arg) => Object.hasOwn(FLAGS, arg)).map((arg) => FLAGS[arg]);
   return {
-    size: { ...size, ...Object.fromEntries(switches) },
-    claudeArgs: args.filter((arg) => !Object.hasOwn(FLAGS, arg)),
+    size: { ...size, ...Object.fromEntries(switches), ...(effort && { effort }) },
+    claudeArgs: claudeArgs.filter((arg) => !Object.hasOwn(FLAGS, arg)),
   };
 }

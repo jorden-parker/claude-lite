@@ -2,6 +2,9 @@ import type { Size } from "./sizes.ts";
 
 export function renderSettings(base: Record<string, any>, hooks: unknown, size: Size) {
   const model = size.model;
+  const extraBody = size.thinking
+    ? size.effort && { output_config: { effort: size.effort } }
+    : { thinking: { type: "disabled" } };
   const { CLAUDE_CODE_EXTRA_BODY: _baseBody, ...baseEnv } = base.env ?? {};
   const { sandbox, permissions: _basePermissions, ...baseRest } = base;
   return {
@@ -17,9 +20,7 @@ export function renderSettings(base: Record<string, any>, hooks: unknown, size: 
       ANTHROPIC_DEFAULT_HAIKU_MODEL: model,
       CLAUDE_CODE_MAX_CONTEXT_TOKENS: String(size.context),
       CLAUDE_CODE_MAX_OUTPUT_TOKENS: String(size.output_tokens),
-      ...(!size.thinking && {
-        CLAUDE_CODE_EXTRA_BODY: JSON.stringify({ thinking: { type: "disabled" } }),
-      }),
+      ...(extraBody && { CLAUDE_CODE_EXTRA_BODY: JSON.stringify(extraBody) }),
     },
     ...(size.permissions && {
       permissions: {
