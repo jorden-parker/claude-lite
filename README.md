@@ -21,7 +21,7 @@ A small TypeScript + Bun take on claude-custom: guard hooks, an Ollama launcher,
 
 Put machine-local overrides in gitignored `config/local-settings.json`; `cl settings` deep-merges it over `config/personal-settings.json` on every launch (arrays replace, e.g. `{"sandbox":{"enabled":false},"permissions":{"ask":[]}}`).
 
-Set `CLAUDE_LITE_NO_PERMISSIONS=anthropic`, `ollama` or `anthropic,ollama` to omit the `permissions` block on that launch path, and `CLAUDE_LITE_NO_SANDBOX` the same way to omit the `sandbox` block.
+Set `CLAUDE_LITE_NO_PERMISSIONS=anthropic`, `ollama` or `anthropic,ollama` to omit the `permissions` block on that launch path, and `CLAUDE_LITE_NO_SANDBOX` the same way to omit the `sandbox` block. On `cl ollama`, `--permissions` and `--sandbox` turn a block back on for one launch (see [Launch on Ollama](#launch-on-ollama)).
 
 ### Upgrading an older install
 
@@ -31,8 +31,15 @@ An older binary has no `update` and no `cl`. Run once, then open a new shell; af
 
 ## Launch on Ollama
 
-    claude-lite ollama [27b|35b] [claude args]
+    claude-lite ollama [27b|35b] [--print-config] [--think|--no-think] [--permissions|--no-permissions] [--sandbox|--no-sandbox] [claude args]
     claude-lite ollama --print-config 27b   # print Modelfile + settings, no launch
+    claude-lite ollama 35b --think --no-sandbox -p "hi"
+
+- `--print-config`: print the Modelfile and settings instead of launching
+- `--think` / `--no-think`: turn thinking on or off for this launch
+- `--permissions` / `--no-permissions`: keep or omit the `permissions` block (including the `Agent` deny) for this launch
+- `--sandbox` / `--no-sandbox`: keep or omit the `sandbox` block for this launch
+- Every other argument, such as `--effort <level>` or `-p`, passes through to `claude`
 
 Pulls the base model and creates the `-cc` model when missing, then runs `claude` with generated settings,
 `config/system-prompt.md` and `Agent` denied. Sizes live in `config/sizes.json`.
