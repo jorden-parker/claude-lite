@@ -1,6 +1,7 @@
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { withoutPermissionsFor } from "../permissions-opt-out.ts";
 import { renderModelfile } from "./modelfile.ts";
 import { renderSettings } from "./settings.ts";
 import { DEFAULT_SIZE, loadSizes, pickSize } from "./sizes.ts";
@@ -33,7 +34,10 @@ function buildPlan(home: string, args: string[]) {
   const claudeArgs = isSize ? rest : args;
   const size = pickSize(sizes, sizeName);
   const read = (name: string) => JSON.parse(readFileSync(join(home, "config", name), "utf8"));
-  const settings = renderSettings(read("ollama-base.json"), read("hooks.json"), size);
+  const settings = withoutPermissionsFor(
+    "ollama",
+    renderSettings(read("ollama-base.json"), read("hooks.json"), size),
+  );
   return { size, settings, modelfile: renderModelfile(size), claudeArgs };
 }
 

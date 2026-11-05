@@ -20,6 +20,8 @@ A small TypeScript + Bun take on claude-custom: guard hooks, an Ollama launcher,
 
 Put machine-local overrides in gitignored `config/local-settings.json`; `cl settings` deep-merges it over `config/personal-settings.json` on every launch (arrays replace, e.g. `{"sandbox":{"enabled":false},"permissions":{"ask":[]}}`).
 
+Set `CLAUDE_LITE_NO_PERMISSIONS=anthropic`, `ollama` or `anthropic,ollama` to omit the `permissions` and `sandbox` blocks on that launch path.
+
 ### Upgrading an older install
 
 An older binary has no `update` and no `cl`. Run once, then open a new shell; after that `cl update` works:

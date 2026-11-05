@@ -59,3 +59,17 @@ test("personal settings trim idle and effort token spend", async () => {
   expect(personal.env.CLAUDE_CODE_ENABLE_AWAY_SUMMARY).toBe("0");
   expect(personal.env.CLAUDE_CODE_DISABLE_TERMINAL_TITLE).toBe("1");
 });
+
+test("CLAUDE_LITE_NO_PERMISSIONS=anthropic prints no permissions or sandbox", async () => {
+  const previous = process.env.CLAUDE_LITE_NO_PERMISSIONS;
+  process.env.CLAUDE_LITE_NO_PERMISSIONS = "anthropic";
+  try {
+    const output = await printedSettings(
+      liteHomeWith({ permissions: { deny: ["x"] }, sandbox: { enabled: true }, keep: 1 }),
+    );
+    expect(output).toBe('{"keep":1}');
+  } finally {
+    if (previous === undefined) delete process.env.CLAUDE_LITE_NO_PERMISSIONS;
+    else process.env.CLAUDE_LITE_NO_PERMISSIONS = previous;
+  }
+});

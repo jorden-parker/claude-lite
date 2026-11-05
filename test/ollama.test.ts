@@ -76,3 +76,28 @@ test("ollama sandbox can read skills inside the denied ~/.claude", async () => {
   expect(filesystem.denyRead).toContain("~/.claude");
   expect(filesystem.allowRead).toContain("~/.claude/skills");
 });
+
+async function writtenSettings(optOut: string) {
+  const previous = process.env.CLAUDE_LITE_NO_PERMISSIONS;
+  process.env.CLAUDE_LITE_NO_PERMISSIONS = optOut;
+  try {
+    const { calls, run } = recorder(false);
+    await launch(home, [], run);
+    const claude = calls.at(-1)!;
+    return await Bun.file(claude[claude.indexOf("--settings") + 1]).json();
+  } finally {
+    if (previous === undefined) delete process.env.CLAUDE_LITE_NO_PERMISSIONS;
+    else process.env.CLAUDE_LITE_NO_PERMISSIONS = previous;
+  }
+}
+
+test("CLAUDE_LITE_NO_PERMISSIONS=ollama drops permissions and sandbox", async () => {
+  const written = await writtenSettings("ollama");
+  expect(written.permissions).toBeUndefined();
+  expect(written.sandbox).toBeUndefined();
+});
+
+test("CLAUDE_LITE_NO_PERMISSIONS=anthropic keeps the ollama Agent deny", async () => {
+  const written = await writtenSettings("anthropic");
+  expect(written.permissions.deny).toContain("Agent");
+});
