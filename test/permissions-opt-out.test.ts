@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { withOptOutsFor } from "../src/permissions-opt-out.ts";
+import { optsOut, withOptOutsFor } from "../src/permissions-opt-out.ts";
 
 const settings = { permissions: { deny: ["x"] }, sandbox: { enabled: true }, hooks: {}, env: {} };
 
@@ -34,4 +34,10 @@ test("both variables with comma lists drop both blocks on both targets", () => {
   };
   expect(withOptOutsFor("ollama", settings, env)).toEqual({ hooks: {}, env: {} });
   expect(withOptOutsFor("anthropic", settings, env)).toEqual({ hooks: {}, env: {} });
+});
+
+test("optsOut reads the comma list for its key", () => {
+  const env = { CLAUDE_LITE_NO_SANDBOX: "anthropic, ollama" };
+  expect(optsOut("sandbox", "ollama", env)).toBe(true);
+  expect(optsOut("permissions", "ollama", env)).toBe(false);
 });
