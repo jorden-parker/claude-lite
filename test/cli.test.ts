@@ -58,3 +58,30 @@ test("ollama help lists every ollama flag", () => {
   ];
   for (const flag of flags) expect(COMMAND_HELP.ollama).toContain(flag);
 });
+
+describe("cli strictness and completion", () => {
+  test("__complete ollama lists sizes and flags", () => {
+    const stdout = runCli("__complete", "ollama").stdout.toString();
+    expect(stdout).toContain("27b");
+    expect(stdout).toContain("--think");
+  });
+
+  test("help ollama prints ollama help", () => {
+    const result = runCli("help", "ollama");
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout.toString()).toContain("usage: claude-lite ollama");
+  });
+
+  test("lifecycle command rejects extra args", () => {
+    const result = runCli("doctor", "extra");
+    expect(result.exitCode).toBe(2);
+    expect(result.stderr.toString()).toContain("usage: claude-lite doctor");
+    expect(result.stdout.toString()).not.toContain("done");
+  });
+
+  test("hook alone prints hook help", () => {
+    const result = runCli("hook");
+    expect(result.exitCode).toBe(2);
+    expect(result.stderr.toString()).toContain("usage: claude-lite hook");
+  });
+});

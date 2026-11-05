@@ -1,4 +1,8 @@
 import { join } from "node:path";
+import { COMMAND_HELP } from "./help.ts";
+import { HOOK_NAMES } from "./hooks/run-hook.ts";
+import { FLAGS } from "./ollama/size-overrides.ts";
+import { loadSizes } from "./ollama/sizes.ts";
 
 export type Shell = "zsh" | "bash" | "fish";
 export type CompletionWords = { commands: string[]; hooks: string[]; sizes: string[] };
@@ -6,56 +10,49 @@ export type CompletionWords = { commands: string[]; hooks: string[]; sizes: stri
 export const START = "# >>> claude-lite >>>";
 export const END = "# <<< claude-lite <<<";
 
-const list = (items: string[]) => items.join(" ");
-const OLLAMA_FLAGS = list([
-  "--print-config",
-  "--think",
-  "--no-think",
-  "--permissions",
-  "--no-permissions",
-  "--sandbox",
-  "--no-sandbox",
-]);
-
-const zshBody = ({ commands, hooks, sizes }: CompletionWords) => `_cl() {
-  if (( CURRENT == 2 )); then
-    compadd -- ${list(commands)}
-  elif (( CURRENT == 3 )); then
-    case $words[2] in
-      hook) compadd -- ${list(hooks)} --help ;;
-      ollama) compadd -- ${list(sizes)} ${OLLAMA_FLAGS} --help ;;
-      *) compadd -- --help ;;
-    esac
-  fi
-}`;
-
-const bashBody = ({ commands, hooks, sizes }: CompletionWords) => `_cl() {
-  local current=\${COMP_WORDS[COMP_CWORD]}
-  if (( COMP_CWORD == 1 )); then
-    COMPREPLY=($(compgen -W "${list(commands)}" -- "$current"))
-  elif (( COMP_CWORD == 2 )); then
-    case \${COMP_WORDS[1]} in
-      hook) COMPREPLY=($(compgen -W "${list(hooks)} --help" -- "$current")) ;;
-      ollama) COMPREPLY=($(compgen -W "${list(sizes)} ${OLLAMA_FLAGS} --help" -- "$current")) ;;
-      *) COMPREPLY=($(compgen -W "--help" -- "$current")) ;;
-    esac
-  fi
+const SHIMS: Record<Shell, string> = {
+  zsh: `_cl() {
+  compadd -- \${(f)"$(cl __complete \${words[2,CURRENT-1]})"}
+}`,
+  bash: `_cl() {
+  local cur=\${COMP_WORDS[COMP_CWORD]}
+  COMPREPLY=($(compgen -W "$(cl __complete "\${COMP_WORDS[@]:1:COMP_CWORD-1}")" -- "$cur"))
 }
-complete -F _cl cl`;
+complete -F _cl cl`,
+  fish: "complete -c cl -f -a '(cl __complete (commandline -opc)[2..-1])'",
+};
 
-const fishBody = ({ commands, hooks, sizes }: CompletionWords) =>
-  [
-    "complete -c cl -f",
-    `complete -c cl -n '__fish_use_subcommand' -a '${list(commands)}'`,
-    `complete -c cl -n '__fish_seen_subcommand_from ${list(commands)}' -a '--help'`,
-    `complete -c cl -n '__fish_seen_subcommand_from hook' -a '${list(hooks)}'`,
-    `complete -c cl -n '__fish_seen_subcommand_from ollama' -a '${list(sizes)} ${OLLAMA_FLAGS}'`,
-  ].join("\n");
-
-export function completionScript(shell: Shell, words: CompletionWords): string {
-  const bodies = { zsh: zshBody, bash: bashBody, fish: fishBody };
+export function completionScript(shell: Shell): string {
   const header = shell === "zsh" ? "#compdef cl\n" : "";
-  return `${header}${START}\n${bodies[shell](words)}\n${END}\n`;
+  return `${header}${START}\n${SHIMS[shell]}\n${END}\n`;
+}
+
+export function completionWords(home: string): CompletionWords {
+  let sizes: string[] = [];
+  try {
+    sizes = Object.keys(loadSizes(home));
+  } catch {}
+  return { commands: Object.keys(COMMAND_HELP), hooks: HOOK_NAMES, sizes };
+}
+
+const switchOf = (flag: string) => FLAGS[flag][0];
+
+function ollamaNext(typed: string[], sizes: string[]): string[] {
+  const used = typed.filter((word) => Object.hasOwn(FLAGS, word));
+  const usedSwitches = new Set(used.map(switchOf));
+  const flags = Object.keys(FLAGS).filter((flag) => !usedSwitches.has(switchOf(flag)));
+  if (typed.length === 0) return [...sizes, "--print-config", ...flags, "--help"];
+  if (typed.includes("--help") || typed.at(-1) === "--effort") return [];
+  return typed.includes("--print-config") ? flags : ["--print-config", ...flags];
+}
+
+export function nextWords(typed: string[], { commands, hooks, sizes }: CompletionWords): string[] {
+  const [command, ...rest] = typed;
+  if (command === undefined) return [...commands, "help"];
+  if (command === "help") return rest.length === 0 ? commands : [];
+  if (command === "ollama") return ollamaNext(rest, sizes);
+  if (!commands.includes(command) || rest.length > 0) return [];
+  return command === "hook" ? [...hooks, "--help"] : ["--help"];
 }
 
 export function completionPath(userHome: string, shell: Shell): string {

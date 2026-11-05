@@ -403,7 +403,7 @@ test("install writes completion files and load lines for present shells", async 
     const text = readFileSync(path, "utf8");
     expect(countOf(text, START)).toBe(1);
     expect(countOf(text, END)).toBe(1);
-    expect(text).toContain("27b");
+    expect(text).toContain("cl __complete");
   }
   const zshrc = readFileSync(join(user, ".zshrc"), "utf8");
   expect(zshrc).toContain("fpath+=(");

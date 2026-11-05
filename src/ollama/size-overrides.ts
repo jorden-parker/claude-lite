@@ -4,7 +4,7 @@ import type { Size } from "./sizes.ts";
 type Env = Record<string, string | undefined>;
 type Switch = "thinking" | "permissions" | "sandbox";
 
-const FLAGS: Record<string, [Switch, boolean]> = {
+export const FLAGS: Record<string, [Switch, boolean]> = {
   "--think": ["thinking", true],
   "--no-think": ["thinking", false],
   "--permissions": ["permissions", true],

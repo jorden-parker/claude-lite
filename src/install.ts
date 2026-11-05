@@ -13,12 +13,10 @@ import {
 } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { completionPath, completionScript, END, type Shell, START } from "./completion.ts";
-import { COMMAND_HELP } from "./help.ts";
 import { HOOK_NAMES, hookLogPath } from "./hooks/run-hook.ts";
 import { type Runner, serverResponds, spawnRunner } from "./ollama/launch.ts";
 import { withJsonOverlay } from "./json-overlay.ts";
 import { withOptOutsFor } from "./permissions-opt-out.ts";
-import { loadSizes } from "./ollama/sizes.ts";
 
 const BLOCK = new RegExp(`\\n?${START}[\\s\\S]*?${END}\\n?`);
 
@@ -56,20 +54,11 @@ function targets(userHome: string, home: string): [string, string][] {
 const presentShells = (userHome: string) =>
   SHELL_RCS.filter(([, rc]) => existsSync(join(userHome, ...rc))).map(([shell]) => shell);
 
-function completionWords(home: string) {
-  let sizes: string[] = [];
-  try {
-    sizes = Object.keys(loadSizes(home));
-  } catch {}
-  return { commands: Object.keys(COMMAND_HELP), hooks: HOOK_NAMES, sizes };
-}
-
-function writeCompletions(userHome: string, home: string) {
-  const words = completionWords(home);
+function writeCompletions(userHome: string) {
   for (const shell of presentShells(userHome)) {
     const path = completionPath(userHome, shell);
     mkdirSync(dirname(path), { recursive: true });
-    writeFileSync(path, completionScript(shell, words));
+    writeFileSync(path, completionScript(shell));
   }
 }
 
@@ -130,7 +119,7 @@ export async function install(userHome: string, home: string): Promise<number> {
       );
     });
   }
-  writeCompletions(userHome, home);
+  writeCompletions(userHome);
   linkCl(userHome, home);
   return 0;
 }
