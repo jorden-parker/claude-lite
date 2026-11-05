@@ -60,9 +60,11 @@ test("ollama help lists every ollama flag", () => {
 });
 
 describe("cli strictness and completion", () => {
-  test("__complete ollama lists sizes and flags", () => {
-    const stdout = runCli("__complete", "ollama").stdout.toString();
-    expect(stdout).toContain("27b");
+  test("__complete ollama lists sizes, then flags after a size", () => {
+    const sizes = runCli("__complete", "ollama").stdout.toString();
+    expect(sizes).toContain("27b");
+    expect(sizes).not.toContain("--think");
+    const stdout = runCli("__complete", "ollama", "27b").stdout.toString();
     expect(stdout).toContain("--think");
   });
 

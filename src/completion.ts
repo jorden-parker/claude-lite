@@ -11,9 +11,7 @@ export const START = "# >>> claude-lite >>>";
 export const END = "# <<< claude-lite <<<";
 
 const SHIMS: Record<Shell, string> = {
-  zsh: `_cl() {
-  compadd -- \${(f)"$(cl __complete \${words[2,CURRENT-1]})"}
-}`,
+  zsh: 'compadd -- ${(f)"$(cl __complete ${words[2,CURRENT-1]})"}',
   bash: `_cl() {
   local cur=\${COMP_WORDS[COMP_CWORD]}
   COMPREPLY=($(compgen -W "$(cl __complete "\${COMP_WORDS[@]:1:COMP_CWORD-1}")" -- "$cur"))
@@ -41,7 +39,7 @@ function ollamaNext(typed: string[], sizes: string[]): string[] {
   const used = typed.filter((word) => Object.hasOwn(FLAGS, word));
   const usedSwitches = new Set(used.map(switchOf));
   const flags = Object.keys(FLAGS).filter((flag) => !usedSwitches.has(switchOf(flag)));
-  if (typed.length === 0) return [...sizes, "--print-config", ...flags, "--help"];
+  if (typed.length === 0) return [...sizes, "--help"];
   if (typed.includes("--help") || typed.at(-1) === "--effort") return [];
   return typed.includes("--print-config") ? flags : ["--print-config", ...flags];
 }

@@ -38,12 +38,19 @@ describe("nextWords", () => {
     expect(complete("hook")).toEqual([...words.hooks, "--help"]);
     expect(complete("hook", "bash-guard")).toEqual([]);
   });
-  test("ollama offers sizes and flags first", () => {
-    expect(complete("ollama")).toEqual([
-      ...words.sizes,
+  test("ollama offers sizes and help first", () => {
+    expect(complete("ollama")).toEqual([...words.sizes, "--help"]);
+  });
+  test("ollama offers flags after a size", () => {
+    expect(complete("ollama", "27b")).toEqual(["--print-config", ...ollamaFlags]);
+  });
+  test("ollama drops the used sandbox pair", () => {
+    expect(complete("ollama", "27b", "--no-sandbox")).toEqual([
       "--print-config",
-      ...ollamaFlags,
-      "--help",
+      "--think",
+      "--no-think",
+      "--permissions",
+      "--no-permissions",
     ]);
   });
   test("ollama drops sizes, used flags and their pair", () => {
@@ -75,6 +82,12 @@ test.each(shells)("%s script passes its shell's syntax check", (shell) => {
 
 test("zsh script keeps #compdef first", () => {
   expect(completionScript("zsh").startsWith("#compdef cl\n")).toBe(true);
+});
+
+test("zsh script calls compadd without a function wrapper", () => {
+  const script = completionScript("zsh");
+  expect(script).toContain("compadd --");
+  expect(script).not.toContain("_cl() {");
 });
 
 test("completionPath places each shell's file", () => {
