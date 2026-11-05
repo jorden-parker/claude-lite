@@ -1,5 +1,7 @@
 {
   "bashOutputMaxChars": 15000,
+  "effortLevel": "medium",
+  "idleCompaction": false,
   "promptSuggestionEnabled": false,
   "skillListingMaxDescChars": 300,
   "sandbox": {
@@ -63,6 +65,8 @@
     "CLAUDE_CODE_SUBAGENT_MODEL": "haiku",
     "CLAUDE_CODE_SUBAGENT_MODEL_FORCE": "1",
     "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": "70",
+    "CLAUDE_CODE_ENABLE_AWAY_SUMMARY": "0",
+    "CLAUDE_CODE_DISABLE_TERMINAL_TITLE": "1",
     "DISABLE_TELEMETRY": "1",
     "DO_NOT_TRACK": "1",
     "DISABLE_ERROR_REPORTING": "1",

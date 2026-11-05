@@ -49,3 +49,13 @@ test("invalid overlay falls back to the base settings", async () => {
   const output = await printedSettings(liteHomeWith({ a: 1 }, "{not json"));
   expect(output).toBe('{"a":1}');
 });
+
+test("personal settings trim idle and effort token spend", async () => {
+  const personal = await Bun.file(
+    join(import.meta.dir, "..", "config", "personal-settings.json"),
+  ).json();
+  expect(personal.effortLevel).toBe("medium");
+  expect(personal.idleCompaction).toBe(false);
+  expect(personal.env.CLAUDE_CODE_ENABLE_AWAY_SUMMARY).toBe("0");
+  expect(personal.env.CLAUDE_CODE_DISABLE_TERMINAL_TITLE).toBe("1");
+});
