@@ -194,6 +194,9 @@ test("--no-sandbox --no-permissions writes neither block and passes neither flag
   const claude = calls.at(-1)!;
   expect(claude).not.toContain("--no-sandbox");
   expect(claude).not.toContain("--no-permissions");
+  for (const flag of ["--setting-sources", "--permission-mode", "--dangerously-skip-permissions"]) {
+    expect(claude).not.toContain(flag);
+  }
   const written = await Bun.file(claude[claude.indexOf("--settings") + 1]).json();
   expect(written.sandbox).toBeUndefined();
   expect(written.permissions).toBeUndefined();

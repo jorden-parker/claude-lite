@@ -48,6 +48,7 @@ test("install adds blocks idempotently, uninstall restores", async () => {
   expect(readFileSync(join(user, ".zshrc"), "utf8")).toContain(
     '--settings "$("/lite/dist/claude-lite" settings)"',
   );
+  expect(readFileSync(join(user, ".zshrc"), "utf8")).not.toContain("--setting-sources");
   expect(readdirSync(join(user, ".claude")).some((f) => f.startsWith("CLAUDE.md.bak-"))).toBe(true);
   expect(readlinkSync(clPath(user))).toBe("/lite/dist/claude-lite");
   expect(await uninstall(user, "/lite")).toBe(0);
