@@ -13,6 +13,7 @@ A small TypeScript + Bun take on claude-custom: guard hooks, an Ollama launcher,
     cl doctor                    # checks the build, blocks, link, hook config and Ollama health
     cl logs                      # follows hook decisions and the Ollama logs from its plists or Ollama.app
     cl servers                   # finds duplicate Ollama servers on port 11434; checks the server responds; sets the server env (keep-alive, flash attention, q8 KV cache)
+    cl settings                  # prints merged personal + local settings JSON for claude --settings
     cl fix-servers               # keeps Ollama.app; moves leftover Ollama LaunchAgents to ~/.Trash
     cl <command> --help          # usage for one command
 
@@ -48,9 +49,23 @@ Needs Ollama ≥ 0.40.12. MLX runs one request at a time, so two sessions on one
 - `tdd-guard`: no code edit until a test in the same scope was edited and a test command ran; third strike passes
   (`CLAUDE_LITE_TDD=0` turns it off; state in `~/.cache/claude-lite/tdd`)
 
+Decisions log to `~/.cache/claude-lite/hooks.log` (followed by `cl logs`).
+
+## Environment variables
+
+| Variable                     | Purpose                                                                                                                                 | Required                                                                             | Default                                                                          |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
+| `CLAUDE_LITE_HOME`           | The claude-lite checkout that hook commands and config paths resolve against; the `claude` rc function and `cl ollama` set it on launch | Optional when you run `cl` yourself; hook commands need it, and the launchers set it | The checkout containing the binary (`dist/..`), or the repo when run from source |
+| `CLAUDE_LITE_NO_PERMISSIONS` | Comma list of launch paths (`anthropic`, `ollama`) that omit the `permissions` and `sandbox` blocks                                     | Optional                                                                             | Unset, so both blocks are kept                                                   |
+| `CLAUDE_LITE_TDD`            | `0` turns off tdd-guard                                                                                                                 | Optional                                                                             | Unset, so tdd-guard is on                                                        |
+| `CLAUDE_LITE_STATE_DIR`      | Where tdd-guard keeps its per-session state                                                                                             | Optional                                                                             | `~/.cache/claude-lite/tdd`                                                       |
+| `HOME`                       | The user home for install targets and `hooks.log`                                                                                       | Optional                                                                             | `os.homedir()`                                                                   |
+| `PATH`                       | `install` warns when `~/.local/bin` is missing from it                                                                                  | Optional                                                                             | Empty, so you get the warning                                                    |
+| `ANTHROPIC_API_KEY`          | `cl ollama` removes it from the child env so `claude` talks to Ollama                                                                   | Optional                                                                             | None                                                                             |
+
 ## Develop
 
-`bun test`, `bun run lint`, `bun run build`. Hooks are pure `decide(event)` functions; I/O is in `src/hooks/run-hook.ts`.
+`bun test`, `bun run lint`, `bun run typecheck`, `bun run build`. Hooks are pure `decide(event)` functions; I/O is in `src/hooks/run-hook.ts`.
 
 ## Dropped from claude-custom
 
