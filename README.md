@@ -17,7 +17,7 @@ A small TypeScript + Bun take on claude-custom: guard hooks, an Ollama launcher,
     cl fix-servers               # keeps Ollama.app; moves leftover Ollama LaunchAgents to ~/.Trash
     cl <command> --help          # usage for one command
 
-`install` also sets up tab completion for zsh, bash and fish (for each shell whose rc file exists); `update` refreshes it and `uninstall` removes it.
+`install` also sets up tab completion for zsh, bash and fish (for each shell whose rc file exists); it completes only the next valid word and reads sizes live via `cl __complete`; `update` refreshes it and `uninstall` removes it.
 
 Put machine-local overrides in gitignored `config/local-settings.json`; `cl settings` deep-merges it over `config/personal-settings.json` on every launch (arrays replace, e.g. `{"sandbox":{"enabled":false},"permissions":{"ask":[]}}`).
 
