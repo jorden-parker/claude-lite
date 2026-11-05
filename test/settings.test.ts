@@ -60,16 +60,27 @@ test("personal settings trim idle and effort token spend", async () => {
   expect(personal.env.CLAUDE_CODE_DISABLE_TERMINAL_TITLE).toBe("1");
 });
 
-test("CLAUDE_LITE_NO_PERMISSIONS=anthropic prints no permissions or sandbox", async () => {
-  const previous = process.env.CLAUDE_LITE_NO_PERMISSIONS;
-  process.env.CLAUDE_LITE_NO_PERMISSIONS = "anthropic";
+async function printedWithOptOut(variable: string) {
+  const previous = process.env[variable];
+  process.env[variable] = "anthropic";
   try {
-    const output = await printedSettings(
+    return await printedSettings(
       liteHomeWith({ permissions: { deny: ["x"] }, sandbox: { enabled: true }, keep: 1 }),
     );
-    expect(output).toBe('{"keep":1}');
   } finally {
-    if (previous === undefined) delete process.env.CLAUDE_LITE_NO_PERMISSIONS;
-    else process.env.CLAUDE_LITE_NO_PERMISSIONS = previous;
+    if (previous === undefined) delete process.env[variable];
+    else process.env[variable] = previous;
   }
+}
+
+test("CLAUDE_LITE_NO_PERMISSIONS=anthropic prints no permissions", async () => {
+  expect(await printedWithOptOut("CLAUDE_LITE_NO_PERMISSIONS")).toBe(
+    '{"sandbox":{"enabled":true},"keep":1}',
+  );
+});
+
+test("CLAUDE_LITE_NO_SANDBOX=anthropic prints no sandbox", async () => {
+  expect(await printedWithOptOut("CLAUDE_LITE_NO_SANDBOX")).toBe(
+    '{"permissions":{"deny":["x"]},"keep":1}',
+  );
 });

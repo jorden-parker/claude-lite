@@ -77,27 +77,33 @@ test("ollama sandbox can read skills inside the denied ~/.claude", async () => {
   expect(filesystem.allowRead).toContain("~/.claude/skills");
 });
 
-async function writtenSettings(optOut: string) {
-  const previous = process.env.CLAUDE_LITE_NO_PERMISSIONS;
-  process.env.CLAUDE_LITE_NO_PERMISSIONS = optOut;
+async function writtenSettings(variable: string, optOut: string) {
+  const previous = process.env[variable];
+  process.env[variable] = optOut;
   try {
     const { calls, run } = recorder(false);
     await launch(home, [], run);
     const claude = calls.at(-1)!;
     return await Bun.file(claude[claude.indexOf("--settings") + 1]).json();
   } finally {
-    if (previous === undefined) delete process.env.CLAUDE_LITE_NO_PERMISSIONS;
-    else process.env.CLAUDE_LITE_NO_PERMISSIONS = previous;
+    if (previous === undefined) delete process.env[variable];
+    else process.env[variable] = previous;
   }
 }
 
-test("CLAUDE_LITE_NO_PERMISSIONS=ollama drops permissions and sandbox", async () => {
-  const written = await writtenSettings("ollama");
+test("CLAUDE_LITE_NO_PERMISSIONS=ollama drops permissions and keeps sandbox", async () => {
+  const written = await writtenSettings("CLAUDE_LITE_NO_PERMISSIONS", "ollama");
   expect(written.permissions).toBeUndefined();
+  expect(written.sandbox).toBeDefined();
+});
+
+test("CLAUDE_LITE_NO_SANDBOX=ollama drops sandbox and keeps permissions", async () => {
+  const written = await writtenSettings("CLAUDE_LITE_NO_SANDBOX", "ollama");
   expect(written.sandbox).toBeUndefined();
+  expect(written.permissions.deny).toContain("Agent");
 });
 
 test("CLAUDE_LITE_NO_PERMISSIONS=anthropic keeps the ollama Agent deny", async () => {
-  const written = await writtenSettings("anthropic");
+  const written = await writtenSettings("CLAUDE_LITE_NO_PERMISSIONS", "anthropic");
   expect(written.permissions.deny).toContain("Agent");
 });

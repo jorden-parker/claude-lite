@@ -1,20 +1,37 @@
 import { expect, test } from "bun:test";
-import { withoutPermissionsFor } from "../src/permissions-opt-out.ts";
+import { withOptOutsFor } from "../src/permissions-opt-out.ts";
 
 const settings = { permissions: { deny: ["x"] }, sandbox: { enabled: true }, hooks: {}, env: {} };
 
 test("unset leaves settings untouched", () => {
-  expect(withoutPermissionsFor("anthropic", settings, {})).toBe(settings);
+  expect(withOptOutsFor("anthropic", settings, {})).toBe(settings);
 });
 
-test("anthropic target drops the blocks for anthropic only", () => {
+test("CLAUDE_LITE_NO_PERMISSIONS drops only permissions for its target", () => {
   const env = { CLAUDE_LITE_NO_PERMISSIONS: "anthropic" };
-  expect(withoutPermissionsFor("anthropic", settings, env)).toEqual({ hooks: {}, env: {} });
-  expect(withoutPermissionsFor("ollama", settings, env)).toBe(settings);
+  expect(withOptOutsFor("anthropic", settings, env)).toEqual({
+    sandbox: { enabled: true },
+    hooks: {},
+    env: {},
+  });
+  expect(withOptOutsFor("ollama", settings, env)).toBe(settings);
 });
 
-test("a comma list covers both targets", () => {
-  const env = { CLAUDE_LITE_NO_PERMISSIONS: "anthropic,ollama" };
-  expect(withoutPermissionsFor("ollama", settings, env)).toEqual({ hooks: {}, env: {} });
-  expect(withoutPermissionsFor("anthropic", settings, env)).toEqual({ hooks: {}, env: {} });
+test("CLAUDE_LITE_NO_SANDBOX drops only sandbox for its target", () => {
+  const env = { CLAUDE_LITE_NO_SANDBOX: "ollama" };
+  expect(withOptOutsFor("ollama", settings, env)).toEqual({
+    permissions: { deny: ["x"] },
+    hooks: {},
+    env: {},
+  });
+  expect(withOptOutsFor("anthropic", settings, env)).toBe(settings);
+});
+
+test("both variables with comma lists drop both blocks on both targets", () => {
+  const env = {
+    CLAUDE_LITE_NO_PERMISSIONS: "anthropic, ollama",
+    CLAUDE_LITE_NO_SANDBOX: "ollama,anthropic",
+  };
+  expect(withOptOutsFor("ollama", settings, env)).toEqual({ hooks: {}, env: {} });
+  expect(withOptOutsFor("anthropic", settings, env)).toEqual({ hooks: {}, env: {} });
 });

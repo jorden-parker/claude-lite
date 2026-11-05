@@ -14,7 +14,7 @@ TypeScript + Bun: guard hooks, Ollama launcher, installer. See README.md for usa
 - `src/cli.ts`: entry point and subcommand dispatch (`install`, `update`, `build`, `uninstall`, `doctor`, `logs`, `servers`, `fix-servers`, `settings`, `ollama`, `hook <name>`)
 - `src/install.ts`: lifecycle commands, Ollama server checks, `settings` merge (`mergeSettings`)
 - `src/help.ts`: `COMMAND_HELP`/`USAGE`; `src/completion.ts`: shell completion; `src/home.ts`: `liteHome()` (`CLAUDE_LITE_HOME` or the checkout)
-- `src/permissions-opt-out.ts`: `withoutPermissionsFor` for `CLAUDE_LITE_NO_PERMISSIONS`
+- `src/permissions-opt-out.ts`: `withOptOutsFor` for `CLAUDE_LITE_NO_PERMISSIONS` and `CLAUDE_LITE_NO_SANDBOX`
 - `src/hooks/`: each hook is a pure `decide(event)` function. I/O lives only in `run-hook.ts`, which logs decisions to `~/.cache/claude-lite/hooks.log`. `comments.ts` is shared comment detection for edit-check and tdd-guard, not a hook.
 - `src/ollama/`: Modelfile and settings rendering, size table, launcher
 - `config/`: `hooks.json` wires hooks, `sizes.json` defines model sizes, `system-prompt.md` is injected on launch, `personal-settings.json` is the base for `settings`, `local-settings.json` (gitignored) overlays it, `ollama-base.json` is the base for `ollama`, `PREFERENCES.md` is @-imported into `~/.claude/CLAUDE.md` by install

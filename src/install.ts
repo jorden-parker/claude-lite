@@ -16,7 +16,7 @@ import { completionPath, completionScript, END, type Shell, START } from "./comp
 import { COMMAND_HELP } from "./help.ts";
 import { HOOK_NAMES, hookLogPath } from "./hooks/run-hook.ts";
 import { type Runner, serverResponds, spawnRunner } from "./ollama/launch.ts";
-import { withoutPermissionsFor } from "./permissions-opt-out.ts";
+import { withOptOutsFor } from "./permissions-opt-out.ts";
 import { loadSizes } from "./ollama/sizes.ts";
 
 const BLOCK = new RegExp(`\\n?${START}[\\s\\S]*?${END}\\n?`);
@@ -358,6 +358,6 @@ export async function settings(_userHome: string, home: string): Promise<number>
       console.error(`claude-lite: ignoring invalid ${overlayPath}: ${(error as Error).message}`);
     }
   }
-  console.log(JSON.stringify(withoutPermissionsFor("anthropic", effective)));
+  console.log(JSON.stringify(withOptOutsFor("anthropic", effective)));
   return 0;
 }
