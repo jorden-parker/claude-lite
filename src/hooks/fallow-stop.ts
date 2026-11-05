@@ -20,6 +20,13 @@ function changedScript(cwd: string, run: Run): boolean {
   return status.output.split("\n").some((line) => SCRIPT_FILE.test(line.trim()));
 }
 
+function hasScriptChange(event: HookEvent, cwd: string, run: Run): boolean {
+  if (event.hook_event_name === "PostToolUse") {
+    return SCRIPT_FILE.test(event.tool_input?.file_path ?? "");
+  }
+  return changedScript(cwd, run);
+}
+
 function baseArgs(cwd: string, run: Run): string[] {
   for (const branch of ["main", "master"]) {
     if (run(["git", "rev-parse", "--verify", "--quiet", branch], cwd)?.ok) {
@@ -43,7 +50,7 @@ export function decideFallowStop(
 ): HookResult {
   const cwd = event.cwd;
   if (!cwd || event.stop_hook_active) return null;
-  if (!changedScript(cwd, run)) return null;
+  if (!hasScriptChange(event, cwd, run)) return null;
   const bin = binFor(cwd);
   if (!bin) return null;
   const audit = run([bin, "audit", "--format", "compact", "--quiet", ...baseArgs(cwd, run)], cwd);

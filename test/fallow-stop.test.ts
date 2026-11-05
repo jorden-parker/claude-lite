@@ -46,6 +46,23 @@ test("blocks with findings capped at 15 lines plus a hint", () => {
   expect(lines[16]).toContain("fallow explain");
 });
 
+const edited = (filePath: string) => ({
+  hook_event_name: "PostToolUse",
+  cwd: "/repo",
+  tool_input: { file_path: filePath },
+});
+
+test("blocks right after a script edit", () => {
+  const result = decideFallowStop(edited("/repo/a.ts"), stub("", found(1)), fallow);
+  expect(result?.exitCode).toBe(2);
+  expect(result?.stderr).toContain("unused-export");
+});
+
+test("skips non-script edits even when a script is changed", () =>
+  expect(
+    decideFallowStop(edited("/repo/README.md"), stub(" M a.ts\n", found(1)), fallow),
+  ).toBeNull());
+
 test("lists untracked files individually so new folders are seen", () => {
   const seen: string[][] = [];
   decideFallowStop(
