@@ -72,9 +72,11 @@ describe("nextWords", () => {
       ...ollamaFlags.slice(0, -1),
     ]);
   });
-  test("ollama offers nothing after --help or --effort", () => {
+  test("ollama offers effort levels after --effort", () => {
+    expect(complete("ollama", "27b", "--effort")).toEqual(["low", "medium", "xhigh"]);
+  });
+  test("ollama offers nothing after --help", () => {
     expect(complete("ollama", "--help")).toEqual([]);
-    expect(complete("ollama", "27b", "--effort")).toEqual([]);
   });
   test("unknown command offers nothing", () => {
     expect(complete("nope")).toEqual([]);

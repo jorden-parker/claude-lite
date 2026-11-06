@@ -33,6 +33,8 @@ export function completionWords(home: string): CompletionWords {
   return { commands: Object.keys(COMMAND_HELP), hooks: HOOK_NAMES, sizes };
 }
 
+const EFFORT_LEVELS = ["low", "medium", "xhigh"];
+
 const switchOf = (flag: string) => FLAGS[flag][0];
 
 function ollamaNext(typed: string[], sizes: string[]): string[] {
@@ -41,7 +43,8 @@ function ollamaNext(typed: string[], sizes: string[]): string[] {
   const flags = Object.keys(FLAGS).filter((flag) => !usedSwitches.has(switchOf(flag)));
   if (!typed.includes("--effort")) flags.push("--effort");
   if (typed.length === 0) return [...sizes, "--help"];
-  if (typed.includes("--help") || typed.at(-1) === "--effort") return [];
+  if (typed.at(-1) === "--effort") return EFFORT_LEVELS;
+  if (typed.includes("--help")) return [];
   return typed.includes("--print-config") ? flags : ["--print-config", ...flags];
 }
 
