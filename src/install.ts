@@ -214,8 +214,8 @@ export async function doctor(
     ["ollama server responds", await serverResponds(run)],
     ["one ollama startup source", ollamaStartupSources(userHome, systemRoot).length <= 1],
     [
-      "agent-browser on PATH",
-      (await run(["sh", "-c", "command -v agent-browser >/dev/null"])) === 0,
+      "agent-browser runs",
+      (await run(["sh", "-c", "agent-browser --version >/dev/null 2>&1"])) === 0,
     ],
   ];
   for (const [label, ok] of checks) console.log(`${ok ? "ok  " : "FAIL"} ${label}`);

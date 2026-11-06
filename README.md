@@ -65,7 +65,7 @@ Needs Ollama ≥ 0.40.12. MLX runs one request at a time, so two sessions on one
 - `bash-trim`: keeps head, tail and error lines of long Bash output
 - `read-guard`: denies Reads of files over 300 lines without `limit <= 300`
 - `edit-check`: prettier/eslint/biome (project `node_modules/.bin`), gofmt, ruff, shellcheck; rejects new comments
-- `browser-check`: at Stop, blocks once when a UI file (`.tsx`, `.jsx`, `.vue`, `.svelte`, `.astro`, `.html`, CSS) was edited after the last browser console read (`agent-browser console` or `errors`, Playwright MCP, or Claude in Chrome); `cl doctor` checks that [agent-browser](https://agent-browser.dev/) (`brew install agent-browser`) is on PATH
+- `browser-check`: at Stop, blocks once when a UI file (`.tsx`, `.jsx`, `.vue`, `.svelte`, `.astro`, `.html`, CSS) was edited after the last browser console read (`agent-browser console` or `errors`, Playwright MCP, or Claude in Chrome); `cl doctor` checks that [agent-browser](https://agent-browser.dev/) (`brew install agent-browser`) runs
 - `fallow-stop`: after a `.ts/.js` edit and at Stop, when Fallow is installed, blocks with up to 15 new findings
 - `tdd-guard`: no code edit until a test in the same scope was edited and a test command ran; third strike passes
   (off by default; `CLAUDE_LITE_TDD=1` turns it on; state in `~/.cache/claude-lite/tdd`)

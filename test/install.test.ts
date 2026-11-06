@@ -159,10 +159,11 @@ test("doctor fails when the ollama server does not respond", async () => {
   expect(await doctor(user, home, curlFails, system)).toBe(1);
 });
 
-test("doctor fails when agent-browser is not on PATH", async () => {
+test("doctor fails when agent-browser does not run", async () => {
   const { user, home, system } = await installedHome();
-  const lookupFails: Runner = async (argv) => (argv.join(" ").includes("agent-browser") ? 1 : 0);
-  expect(await doctor(user, home, lookupFails, system)).toBe(1);
+  const versionFails: Runner = async (argv) =>
+    argv.join(" ").includes("agent-browser --version") ? 1 : 0;
+  expect(await doctor(user, home, versionFails, system)).toBe(1);
 });
 
 test("doctor fails with more than one ollama startup source", async () => {
