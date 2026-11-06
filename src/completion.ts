@@ -39,6 +39,7 @@ function ollamaNext(typed: string[], sizes: string[]): string[] {
   const used = typed.filter((word) => Object.hasOwn(FLAGS, word));
   const usedSwitches = new Set(used.map(switchOf));
   const flags = Object.keys(FLAGS).filter((flag) => !usedSwitches.has(switchOf(flag)));
+  if (!typed.includes("--effort")) flags.push("--effort");
   if (typed.length === 0) return [...sizes, "--help"];
   if (typed.includes("--help") || typed.at(-1) === "--effort") return [];
   return typed.includes("--print-config") ? flags : ["--print-config", ...flags];

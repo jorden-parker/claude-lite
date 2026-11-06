@@ -20,6 +20,7 @@ const ollamaFlags = [
   "--no-permissions",
   "--sandbox",
   "--no-sandbox",
+  "--effort",
 ];
 
 describe("nextWords", () => {
@@ -51,6 +52,7 @@ describe("nextWords", () => {
       "--no-think",
       "--permissions",
       "--no-permissions",
+      "--effort",
     ]);
   });
   test("ollama drops sizes, used flags and their pair", () => {
@@ -61,6 +63,13 @@ describe("nextWords", () => {
       "--no-permissions",
       "--sandbox",
       "--no-sandbox",
+      "--effort",
+    ]);
+  });
+  test("ollama drops --effort once its value is typed", () => {
+    expect(complete("ollama", "27b", "--effort", "low")).toEqual([
+      "--print-config",
+      ...ollamaFlags.slice(0, -1),
     ]);
   });
   test("ollama offers nothing after --help or --effort", () => {
