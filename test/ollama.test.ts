@@ -55,6 +55,32 @@ test("missing model pulls and creates, default size 27b", async () => {
   expect(calls[2][2]).toBe("qwen3.8:27b-dflash2-nvfp4");
 });
 
+test("launch loads no MCP servers", async () => {
+  const { calls, run } = recorder(false);
+  await launch(home, [], run);
+  expect(calls.at(-1)).toContain("--strict-mcp-config");
+});
+
+test("launch disables the plugins the user enabled", async () => {
+  const configDir = mkdtempSync(join(tmpdir(), "claude-config-"));
+  writeFileSync(
+    join(configDir, "settings.json"),
+    JSON.stringify({ enabledPlugins: { "a@m": true, "b@m": false } }),
+  );
+  const previous = process.env.CLAUDE_CONFIG_DIR;
+  process.env.CLAUDE_CONFIG_DIR = configDir;
+  try {
+    const { calls, run } = recorder(false);
+    await launch(home, [], run);
+    const claude = calls.at(-1)!;
+    const written = await Bun.file(claude[claude.indexOf("--settings") + 1]).json();
+    expect(written.enabledPlugins).toEqual({ "a@m": false, "b@m": false });
+  } finally {
+    if (previous === undefined) delete process.env.CLAUDE_CONFIG_DIR;
+    else process.env.CLAUDE_CONFIG_DIR = previous;
+  }
+});
+
 test("launch stops when the ollama server does not respond", async () => {
   const { calls, run } = recorder(false, true);
   expect(await launch(home, [], run)).toBe(1);

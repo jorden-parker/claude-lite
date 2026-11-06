@@ -44,6 +44,8 @@ An older binary has no `update` and no `cl`. Run once, then open a new shell; af
 
 Pulls the base model and creates the `-cc` model when missing, then runs `claude` with generated settings,
 `config/system-prompt.md` and `Agent` denied. Sizes live in `config/sizes.json`.
+It also loads no MCP servers (`--strict-mcp-config`) and turns off every plugin your `~/.claude/settings.json` enables:
+their tools, skills and SessionStart output made the first request about 93k tokens, past the model's context.
 
 Each size sets thinking, effort, permissions and sandbox. Later layers win:
 

@@ -1,5 +1,5 @@
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { renderModelfile } from "./modelfile.ts";
 import { renderSettings } from "./settings.ts";
@@ -37,8 +37,21 @@ function buildPlan(home: string, args: string[]) {
     sizeArgs,
   );
   const read = (name: string) => JSON.parse(readFileSync(join(home, "config", name), "utf8"));
-  const settings = renderSettings(read("ollama-base.json"), read("hooks.json"), size);
+  const settings = {
+    ...renderSettings(read("ollama-base.json"), read("hooks.json"), size),
+    enabledPlugins: disabledUserPlugins(),
+  };
   return { size, settings, modelfile: renderModelfile(size), claudeArgs };
+}
+
+function disabledUserPlugins(): Record<string, false> {
+  const configDir = process.env.CLAUDE_CONFIG_DIR ?? join(homedir(), ".claude");
+  try {
+    const { enabledPlugins } = JSON.parse(readFileSync(join(configDir, "settings.json"), "utf8"));
+    return Object.fromEntries(Object.keys(enabledPlugins ?? {}).map((name) => [name, false]));
+  } catch {
+    return {};
+  }
 }
 
 export async function launch(
@@ -86,6 +99,7 @@ export async function launch(
       size.model,
       "--tools",
       TOOLS,
+      "--strict-mcp-config",
       ...claudeArgs,
     ],
     env,
