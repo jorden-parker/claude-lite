@@ -2,6 +2,7 @@ import { appendFileSync, mkdirSync, renameSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { decide as bashGuard } from "./bash-guard.ts";
+import { decideFromTranscript as browserCheck } from "./browser-check.ts";
 import { decide as commitGuard } from "./commit-guard.ts";
 import { decide as bashTrim } from "./bash-trim.ts";
 import { decide as editCheck } from "./edit-check.ts";
@@ -15,6 +16,7 @@ const MAX_LOG_BYTES = 5_000_000;
 const HOOKS: Record<string, (event: HookEvent) => HookResult> = {
   "bash-guard": bashGuard,
   "bash-trim": bashTrim,
+  "browser-check": browserCheck,
   "commit-guard": commitGuard,
   "fallow-stop": fallowStop,
   "read-guard": readGuard,

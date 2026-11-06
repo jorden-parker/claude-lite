@@ -74,7 +74,7 @@ function compilationIssues(output: string): Issue[] | null {
 function nextDevServerProblem(root: string, run: Run, readText: ReadText): string | null {
   const lock = parseJson(readText(join(root, ".next/dev/lock")));
   if (!lock?.port) {
-    return "Start `next dev` in the background, load the pages you changed, then commit again.";
+    return "Start `next dev` in the background, open the pages you changed in a browser, then commit again.";
   }
   const url = `http://localhost:${lock.port}/_next/mcp`;
   const headers = ["Content-Type: application/json", "Accept: application/json, text/event-stream"];

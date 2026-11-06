@@ -10,7 +10,7 @@ A small TypeScript + Bun take on claude-custom: guard hooks, an Ollama launcher,
     cl build                     # compile dist/claude-lite in the lite home
     cl update                    # git pull --ff-only, bun install, build, install
     cl uninstall                 # removes only what install added
-    cl doctor                    # checks the build, blocks, link, hook config and Ollama health
+    cl doctor                    # checks the build, blocks, link, hook config, Ollama health and agent-browser
     cl logs                      # follows hook decisions and the Ollama logs from its plists or Ollama.app
     cl servers                   # finds duplicate Ollama servers on port 11434; checks the server responds; sets the server env (keep-alive, flash attention, q8 KV cache)
     cl settings                  # prints merged personal + local settings JSON for claude --settings
@@ -65,6 +65,7 @@ Needs Ollama ≥ 0.40.12. MLX runs one request at a time, so two sessions on one
 - `bash-trim`: keeps head, tail and error lines of long Bash output
 - `read-guard`: denies Reads of files over 300 lines without `limit <= 300`
 - `edit-check`: prettier/eslint/biome (project `node_modules/.bin`), gofmt, ruff, shellcheck; rejects new comments
+- `browser-check`: at Stop, blocks once when a UI file (`.tsx`, `.jsx`, `.vue`, `.svelte`, `.astro`, `.html`, CSS) was edited after the last browser console read (`agent-browser console` or `errors`, Playwright MCP, or Claude in Chrome); `cl doctor` checks that [agent-browser](https://agent-browser.dev/) (`brew install agent-browser`) is on PATH
 - `fallow-stop`: after a `.ts/.js` edit and at Stop, when Fallow is installed, blocks with up to 15 new findings
 - `tdd-guard`: no code edit until a test in the same scope was edited and a test command ran; third strike passes
   (off by default; `CLAUDE_LITE_TDD=1` turns it on; state in `~/.cache/claude-lite/tdd`)

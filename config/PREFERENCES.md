@@ -32,10 +32,25 @@ These rules apply to every project and every language, with no exceptions.
 - Find the checks: CLAUDE.md/README commands, `package.json` scripts, Makefile,
   CI workflows. Run them fast to slow: lint, typecheck, tests, build.
 - Dev server: reuse a running one, or start it in the background. Wait until it
-  serves, request the pages or endpoints you changed, grep its log for errors,
-  and stop it if you started it.
+  serves, grep its log for errors, and stop it if you started it.
+- Browser check: required whenever a change can affect a page. Reading the
+  source, running tests or curling the HTML does not count. Every time:
+  1. `agent-browser open <url>` for the affected page.
+  2. `agent-browser console` and `agent-browser errors --json` for console and
+     runtime errors.
+  3. `agent-browser screenshot <path>`, then read the image for visible
+     breakage (blank areas, error overlays, broken layout).
+  4. Fix what you find and repeat from step 1.
+  5. In your final reply, say what you saw in the browser: the URL, the
+     console errors (or that there were none), and anything visibly wrong.
+
+  Playwright MCP or Claude in Chrome also count when they are available. If no
+  browser tool works, say so plainly and do not claim the change works.
+  The task is not done until this check has run. (enforced by the
+  browser-check hook)
+
 - Next.js 16+: reuse the server in `.next/dev/lock`. Check
-  `get_compilation_issues`, and with the page open in a browser, `get_errors`
+  `get_compilation_issues`, and with the page open in the browser, `get_errors`
   through `/_next/mcp` (next-devtools-mcp, or curl). Also run
   `next typegen && tsc --noEmit`.
 - On failure, fix it and re-run all the checks, up to 3 rounds. Then stop and

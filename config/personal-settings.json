@@ -178,6 +178,10 @@
           {
             "type": "command",
             "command": "\"$CLAUDE_LITE_HOME\"/dist/claude-lite hook fallow-stop"
+          },
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_LITE_HOME\"/dist/claude-lite hook browser-check"
           }
         ]
       }

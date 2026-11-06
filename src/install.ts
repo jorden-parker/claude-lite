@@ -213,6 +213,10 @@ export async function doctor(
     ["hooks known", hooksKnown],
     ["ollama server responds", await serverResponds(run)],
     ["one ollama startup source", ollamaStartupSources(userHome, systemRoot).length <= 1],
+    [
+      "agent-browser on PATH",
+      (await run(["sh", "-c", "command -v agent-browser >/dev/null"])) === 0,
+    ],
   ];
   for (const [label, ok] of checks) console.log(`${ok ? "ok  " : "FAIL"} ${label}`);
   return checks.every(([, ok]) => ok) ? 0 : 1;
