@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { decide, decideWithStateFile, emptyState } from "../src/hooks/tdd-guard.ts";
@@ -78,8 +78,19 @@ test("a corrupt state file fails open and is rewritten", () => {
   const dir = mkdtempSync(join(tmpdir(), "tdd-"));
   writeFileSync(join(dir, "s1.json"), "");
   process.env.CLAUDE_LITE_STATE_DIR = dir;
+  process.env.CLAUDE_LITE_TDD = "1";
   const result = decideWithStateFile({ ...pre("/p/a.go"), session_id: "s1" });
   delete process.env.CLAUDE_LITE_STATE_DIR;
+  delete process.env.CLAUDE_LITE_TDD;
   expect(isDeny(result)).toBe(true);
   expect(JSON.parse(readFileSync(join(dir, "s1.json"), "utf8")).strikes).toEqual({ "/p/a.go": 1 });
+});
+
+test("is off unless CLAUDE_LITE_TDD=1 and writes no state", () => {
+  const dir = mkdtempSync(join(tmpdir(), "tdd-"));
+  process.env.CLAUDE_LITE_STATE_DIR = dir;
+  const result = decideWithStateFile({ ...pre("/p/a.go"), session_id: "s2" });
+  delete process.env.CLAUDE_LITE_STATE_DIR;
+  expect(result).toBeNull();
+  expect(existsSync(join(dir, "s2.json"))).toBe(false);
 });

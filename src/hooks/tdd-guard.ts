@@ -99,7 +99,7 @@ function readState(file: string): TddState {
 }
 
 export function decideWithStateFile(event: HookEvent): HookResult {
-  if (process.env.CLAUDE_LITE_TDD === "0") return null;
+  if (process.env.CLAUDE_LITE_TDD !== "1") return null;
   const dir = process.env.CLAUDE_LITE_STATE_DIR ?? join(homedir(), ".cache", "claude-lite", "tdd");
   const file = join(dir, `${event.session_id ?? "nosession"}.json`);
   const state = readState(file);
