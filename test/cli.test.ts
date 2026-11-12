@@ -49,6 +49,12 @@ test("ollama help lists every ollama flag", () => {
   for (const flag of flags) expect(COMMAND_HELP.ollama).toContain(flag);
 });
 
+test("mlx help lists every ollama flag and every configured size", async () => {
+  const sizes = await Bun.file(join(import.meta.dir, "..", "config", "sizes.json")).json();
+  for (const word of ["--print-config", "--effort", ...Object.keys(FLAGS), ...Object.keys(sizes)])
+    expect(COMMAND_HELP.mlx).toContain(word);
+});
+
 test("bench help lists its flags", () => {
   for (const flag of ["--json", "--think", "--effort", "--runs", "--compare"]) {
     expect(COMMAND_HELP.bench).toContain(flag);

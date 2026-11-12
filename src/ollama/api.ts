@@ -115,6 +115,25 @@ export async function streamChat(request: ChatRequest, baseUrl = ollamaUrl()): P
   return { ...mergeChunks(chunks), first_token_seconds: (firstChunkAt - startedAt) / 1000 };
 }
 
+export async function unloadModels(baseUrl = ollamaUrl()): Promise<string[]> {
+  try {
+    const running = (await (await fetch(`${baseUrl}/api/ps`)).json()) as {
+      models?: { name: string }[];
+    };
+    const names = (running.models ?? []).map((model) => model.name);
+    for (const model of names) {
+      await fetch(`${baseUrl}/api/generate`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ model, keep_alive: 0 }),
+      });
+    }
+    return names;
+  } catch {
+    return [];
+  }
+}
+
 export const fetchApi: LauncherApi = {
   load: async (model) => {
     try {

@@ -6,6 +6,7 @@ import {
   ollamaUrl,
   parseParameters,
   streamChat,
+  unloadModels,
 } from "../src/ollama/api.ts";
 
 test("parseParameters reads numeric lines and skips text values", () => {
@@ -80,6 +81,38 @@ test("isRemoteHost is false for this machine and true for another one", () => {
   expect(isRemoteHost({ OLLAMA_HOST: "127.0.0.1:11434" })).toBe(false);
   expect(isRemoteHost({ OLLAMA_HOST: "0.0.0.0" })).toBe(false);
   expect(isRemoteHost({ OLLAMA_HOST: "studio.local" })).toBe(true);
+});
+
+test("unloadModels unloads every loaded model with keep_alive 0", async () => {
+  const unloadBodies: any[] = [];
+  const server = Bun.serve({
+    port: 0,
+    fetch: async (request) => {
+      if (new URL(request.url).pathname === "/api/ps")
+        return Response.json({ models: [{ name: "first" }, { name: "second" }] });
+      unloadBodies.push(await request.json());
+      return Response.json({});
+    },
+  });
+  try {
+    expect(await unloadModels(`http://localhost:${server.port}`)).toEqual(["first", "second"]);
+    expect(unloadBodies).toEqual([
+      { model: "first", keep_alive: 0 },
+      { model: "second", keep_alive: 0 },
+    ]);
+  } finally {
+    server.stop(true);
+  }
+});
+
+test("unloadModels returns nothing when Ollama is down or has nothing loaded", async () => {
+  expect(await unloadModels("http://127.0.0.1:1")).toEqual([]);
+  const server = Bun.serve({ port: 0, fetch: () => Response.json({ models: [] }) });
+  try {
+    expect(await unloadModels(`http://localhost:${server.port}`)).toEqual([]);
+  } finally {
+    server.stop(true);
+  }
 });
 
 test("fetchApi talks to the server named by OLLAMA_HOST", async () => {

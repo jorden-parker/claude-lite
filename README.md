@@ -16,6 +16,7 @@ An Ollama launcher for Claude Code, in TypeScript and Bun. Hooks, rules and styl
     cl fix-servers               # keeps Ollama.app; moves leftover Ollama LaunchAgents to ~/.Trash
     cl config                    # screen for the Ollama default size, thinking, effort, output tokens, sandbox, permission mode and system prompt
     cl ollama [size]             # launches Claude Code on a local model (see below)
+    cl mlx [size]                # same, but the model runs on vllm-mlx instead of Ollama
     cl bench [size]              # measures a size's model: tool-use quality on fixed tasks, tokens/s, load time
     cl <command> --help          # usage for one command
 
@@ -60,6 +61,21 @@ Set `OLLAMA_HOST` (for example `OLLAMA_HOST=studio.local:11434 cl ollama 35b`) t
 
 Sandbox and permission mode come from `config/ollama.json`, with gitignored `config/local-ollama.json` deep-merged over it (arrays replace, e.g. `{"sandbox":{"enabled":false},"permissions":{"deny":[],"ask":[]}}`). `cl config` writes that file. The launcher adds the paths and environment variables in `config/sandbox-secrets.json` to the sandbox's `denyRead` list and denied credentials.
 
+## Launch on MLX directly
+
+    claude-lite mlx [27b|35b|9b] [--print-config] [--think|--no-think] [--effort <level>] [claude args]
+    claude-lite mlx 35b --print-config   # print the server command + settings, no launch
+
+Runs the size's `mlx` model (an `mlx-community` 4-bit build named in `config/sizes.json`) through [vllm-mlx](https://github.com/waybarrios/vllm-mlx), which serves the Anthropic Messages API that `claude` needs, instead of Ollama. Needs [uv](https://docs.astral.sh/uv/); nothing is installed into the repo.
+
+1. Checks `127.0.0.1:8435/v1/models` (`CLAUDE_LITE_MLX_PORT` changes the port; 11435 is taken by Ollama's llama.cpp runner). A vllm-mlx already serving the size's model (for example one left by an interrupted run) is reused and keeps running after `claude` exits; stop it with `pkill -f 'vllm-mlx.* serve'`. Anything else on the port stops the launch, and `lsof` names the process.
+2. Downloads the model with `uvx --from huggingface_hub hf download` (cached in `~/.cache/huggingface`; shows progress the first time).
+3. Unloads every model loaded in a local Ollama (`/api/ps`, then `keep_alive: 0`) so they don't share memory with MLX; Ollama being down or idle is fine.
+4. Starts `uvx vllm-mlx@0.6.0 serve` in the background with the Qwen tool and reasoning parsers, the size's sampling as server defaults and thinking off unless the size or `--think` turns it on. Its log is `~/.cache/claude-lite/mlx-server.log`.
+5. Waits for `/v1/models`, runs `claude` with the same settings, system prompt and tools as `cl ollama`, and stops the server when `claude` exits.
+
+The tool and reasoning parsers assume a Qwen 3.5+ model; a size with another model family needs its own parsers. `cl bench` still measures only Ollama.
+
 ### Measure a size
 
     cl bench [27b|35b|9b] [--think|--no-think] [--effort <level>] [--runs <n>] [--compare] [--json]
@@ -84,6 +100,7 @@ Defaults to `27b` and 3 runs. Benches the size three times, once each for the ba
 | `CLAUDE_LITE_EFFORT`   | Effort level for `cl ollama` (`low`, `medium` or `xhigh` on Qwen3.8; needs thinking on); `--effort` overrides it                                                              | Optional | The size's `effort`, else unset                                                  |
 | `CLAUDE_LITE_HOME`     | The claude-lite checkout that `config/` paths resolve against                                                                                                                 | Optional | The checkout containing the binary (`dist/..`), or the repo when run from source |
 | `CLAUDE_CONFIG_DIR`    | The Claude config directory whose `settings.json` lists the built-in plugins `cl ollama` turns off                                                                            | Optional | `~/.claude`                                                                      |
+| `CLAUDE_LITE_MLX_PORT` | Port `cl mlx` serves vllm-mlx on and points `claude` at                                                                                                                       | Optional | `8435`                                                                           |
 | `CLAUDE_LITE_THINKING` | `on` or `off` sets thinking for `cl ollama`; `--think`/`--no-think` override it                                                                                               | Optional | The size's `thinking`                                                            |
 | `OLLAMA_HOST`          | Address of the Ollama server for `cl ollama` and `cl bench`: `host`, `host:port` or a URL; a remote host skips the local memory check and joins the sandbox's allowed domains | Optional | `127.0.0.1:11434`                                                                |
 | `HOME`                 | The user home for install targets, the Ollama logs and the bench history                                                                                                      | Optional | `os.homedir()`                                                                   |

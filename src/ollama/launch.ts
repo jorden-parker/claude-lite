@@ -69,13 +69,21 @@ export function ollamaBaseSettings(home: string): Record<string, any> {
   return withSharedSecrets(overlaid, home);
 }
 
-function buildPlan(home: string, args: string[]) {
-  const { name, size, claudeArgs } = resolveSize(home, args);
+export function renderLaunchSettings(home: string, size: Size, serverUrl?: string) {
   const rendered = {
     ...renderSettings(ollamaBaseSettings(home), size),
     enabledPlugins: disabledBuiltinPlugins(),
   };
-  const settings = process.env.OLLAMA_HOST ? withServerUrl(rendered, ollamaUrl()) : rendered;
+  return serverUrl ? withServerUrl(rendered, serverUrl) : rendered;
+}
+
+function buildPlan(home: string, args: string[]) {
+  const { name, size, claudeArgs } = resolveSize(home, args);
+  const settings = renderLaunchSettings(
+    home,
+    size,
+    process.env.OLLAMA_HOST ? ollamaUrl() : undefined,
+  );
   return { name, size, settings, modelfile: renderModelfile(size), claudeArgs };
 }
 
@@ -176,12 +184,28 @@ async function launchFrom(
     console.error(loadFailureHint(home, name));
     return 1;
   }
+  return await runClaude(
+    { dir, home, model: size.model, settings, claudeArgs, url: ollamaUrl() },
+    run,
+  );
+}
+
+type ClaudeLaunch = {
+  dir: string;
+  home: string;
+  model: string;
+  settings: Record<string, any>;
+  claudeArgs: string[];
+  url: string;
+};
+
+export async function runClaude(
+  { dir, home, model, settings, claudeArgs, url }: ClaudeLaunch,
+  run: Runner,
+): Promise<number> {
   const settingsPath = join(dir, "settings.json");
   writeFileSync(settingsPath, JSON.stringify(settings, null, 2), { mode: 0o600 });
-  const env: Record<string, string | undefined> = {
-    ...process.env,
-    ANTHROPIC_BASE_URL: ollamaUrl(),
-  };
+  const env: Record<string, string | undefined> = { ...process.env, ANTHROPIC_BASE_URL: url };
   delete env.ANTHROPIC_API_KEY;
   return await run(
     [
@@ -191,7 +215,7 @@ async function launchFrom(
       "--system-prompt-file",
       join(home, "config", "system-prompt.md"),
       "--model",
-      size.model,
+      model,
       "--tools",
       TOOLS,
       "--strict-mcp-config",
