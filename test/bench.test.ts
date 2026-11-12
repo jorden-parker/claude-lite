@@ -12,6 +12,7 @@ import {
   TASKS,
   TOOLS,
 } from "../src/ollama/bench.ts";
+import { modelParameters } from "../src/ollama/modelfile.ts";
 import { loadSizes } from "../src/ollama/sizes.ts";
 
 const home = join(import.meta.dir, "..");
@@ -161,6 +162,14 @@ test("thinking off sends think false", async () => {
   const { api, requests } = scriptedApi(() => reply(say("x"), 1));
   await runBench(loadSizes(home)["9b"], "", [task("direct-answer")], api);
   expect(requests[0].think).toBe(false);
+});
+
+test("runBench sends the size's model parameters, overrides included, as chat options", async () => {
+  const size = { ...loadSizes(home)["9b"], context: 32768 };
+  const { api, requests } = scriptedApi(() => reply(say("x"), 1));
+  await runBench(size, "", [task("direct-answer")], api);
+  expect(requests[0].options).toEqual(modelParameters(size));
+  expect(requests[0].options).toMatchObject({ num_ctx: 32768, temperature: 0.7 });
 });
 
 test("bench runs every task plus the long prompt and prints json on request", async () => {

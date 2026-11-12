@@ -9,6 +9,7 @@ import {
   type OllamaApi,
   type ToolCall,
 } from "./api.ts";
+import { modelParameters } from "./modelfile.ts";
 import { resolveSize, type Size } from "./sizes.ts";
 import { unboundedGitLogReason } from "./git-log-guard.ts";
 
@@ -217,6 +218,7 @@ export async function runBench(
       model: size.model,
       think: size.thinking ? (size.effort ?? true) : false,
       tools: TOOLS,
+      options: modelParameters(size),
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: task.prompt },

@@ -9,7 +9,7 @@
   "promptSuggestionEnabled": false,
   "feedbackDrafts": "off",
   "feedbackSurveyRate": 0,
-  "bashOutputMaxChars": 12000,
+  "bashOutputMaxChars": 6000,
   "env": {
     "ANTHROPIC_BASE_URL": "http://127.0.0.1:11434",
     "ANTHROPIC_AUTH_TOKEN": "ollama",

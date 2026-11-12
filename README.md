@@ -69,7 +69,13 @@ Edit and Write, then prints a PASS/FAIL line per task with its speed and time to
 second and load time. The tasks check what Claude Code needs from a local model: picking the right tool, an `Edit`
 whose `old_string` exists, code without comments, a short direct answer, a bounded `grep` instead of `cat`, a
 test file, and a bounded retry after a denied unbounded `git log` (the denial is the rule in `src/ollama/git-log-guard.ts`). `--json` prints the raw per-task numbers. `--runs <n>` repeats every task and prints a pass count per task. Every run is saved under `~/.cache/claude-lite/bench`, and `--compare` prints the change from the previous run of the same model. Use it before and after changing a size's base model,
-parameters or `config/system-prompt.md`; thinking and effort layer the same way as for `cl ollama`.
+parameters or `config/system-prompt.md`; thinking and effort layer the same way as for `cl ollama`. The bench sends the size's parameters (context, output tokens, sampling) as request options, so overrides in `config/local-sizes.json` are measured.
+
+#### A/B test speed tweaks
+
+    scripts/bench-variants.sh [size] [runs]
+
+Defaults to `27b` and 3 runs. Benches the size three times, once each for the baseline, `temperature` 0.4 and a 32k context, prints `ollama ps` after each so you can read memory use, and then restores `config/local-sizes.json` to what it was (or deletes it if it did not exist). Keep a variant only if generation tokens/s rises and `quality passed/total` does not drop. The size's model must already exist: run `cl ollama <size>` once first.
 
 ## Environment variables
 

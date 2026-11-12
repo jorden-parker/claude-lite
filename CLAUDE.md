@@ -8,6 +8,7 @@ TypeScript + Bun: Ollama launcher, bench, server checks and installer. See READM
 - `bun run lint`: oxlint plus `oxfmt --check`; `bun run format` writes fixes
 - `bun run typecheck`: `tsc`
 - `bun run build`: compiles `src/cli.ts` to `dist/claude-lite`
+- `scripts/bench-variants.sh [size] [runs]`: benches baseline, temperature 0.4 and 32k-context overlays of a size, then restores `config/local-sizes.json`
 
 ## Architecture
 
