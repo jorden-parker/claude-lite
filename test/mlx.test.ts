@@ -149,6 +149,15 @@ test("mlx --qwen runs qwen against the oMLX /v1 endpoint with the served id", as
   expect(envs.at(-1).OPENAI_MODEL).toBe(SERVED_35B);
 });
 
+test("mlx --opencode runs opencode on the oMLX /v1 endpoint with the served id", async () => {
+  const { calls, envs, dependencies } = harness();
+  expect(await launchMlx(home, ["35b", "--opencode"], dependencies)).toBe(0);
+  expect(calls.at(-1)).toEqual(["opencode"]);
+  const config = JSON.parse(envs.at(-1).OPENCODE_CONFIG_CONTENT);
+  expect(config.model).toBe(`claude-lite/${SERVED_35B}`);
+  expect(config.providers["claude-lite"].settings.baseURL).toBe(`${mlxUrl()}/v1`);
+});
+
 test("mlx hands hf download the repo id, not the served id", async () => {
   const { calls, dependencies } = harness();
   await launchMlx(home, ["35b"], dependencies);

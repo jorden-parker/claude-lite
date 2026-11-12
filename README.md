@@ -29,7 +29,7 @@ Older versions wrapped `claude` through an rc function and a CLAUDE.md import. R
 
 ## Launch on Ollama
 
-    claude-lite ollama [27b|35b|9b] [--print-config] [--think|--no-think] [--qwen] [--effort <level>] [claude args]
+    claude-lite ollama [27b|35b|9b] [--print-config] [--think|--no-think] [--qwen|--opencode] [--effort <level>] [claude args]
     claude-lite ollama --print-config 27b   # print Modelfile + settings, no launch
     claude-lite ollama 35b --think -p "hi"
 
@@ -37,6 +37,7 @@ Older versions wrapped `claude` through an rc function and a CLAUDE.md import. R
 - `--think` / `--no-think`: turn thinking on or off for this launch
 - `--effort <level>`: thinking effort sent to the model; needs thinking on. Qwen3.8 accepts `low`, `medium` or `xhigh` (`high` and `max` fall back to `medium`); Qwen3.6 only does on/off
 - `--qwen`: run Qwen Code instead of `claude` (see [Qwen Code](#qwen-code))
+- `--opencode`: run OpenCode instead of `claude` (see [OpenCode](#opencode))
 - Every other argument, such as `-p`, passes through to `claude`
 
 Pulls the base model and creates the `-cc` model when missing or when its parameters no longer match the size, loads it, then runs `claude` with settings from
@@ -69,9 +70,15 @@ Sandbox and permission mode come from `config/ollama.json`, with gitignored `con
 
 Qwen Code runs without claude-lite's permissions, sandbox, secret denies and system prompt, and `cl bench` stays claude-only. Configure Qwen Code's own permissions and sandbox in `~/.qwen/settings.json`.
 
+### OpenCode
+
+`--opencode` (on `ollama` and `mlx`) runs `opencode` after the same server and model setup. It sets `OPENCODE_CONFIG_CONTENT` to an inline config with a `claude-lite` OpenAI-compatible provider at `<server>/v1` and `model` set to `claude-lite/<model>`; that config overrides your global and project `opencode.json` for those keys only. Arguments after the flags pass to `opencode` (for example `cl ollama 27b --opencode run "hi"`). Install it with `npm i -g opencode-ai`.
+
+Like Qwen Code, OpenCode runs without claude-lite's permissions, sandbox, secret denies and system prompt. Configure its own permissions in `~/.config/opencode/opencode.json`.
+
 ## Launch on MLX directly
 
-    claude-lite mlx [27b|35b|9b] [--print-config] [--think|--no-think] [--qwen] [--effort <level>] [claude args]
+    claude-lite mlx [27b|35b|9b] [--print-config] [--think|--no-think] [--qwen|--opencode] [--effort <level>] [claude args]
     claude-lite mlx 35b --print-config   # print the server command, model settings and settings, no launch
 
 Runs the size's `mlx` model (an `mlx-community` 4-bit build named in `config/sizes.json`) through [oMLX](https://github.com/jundot/omlx) 0.7.3 or newer, which serves the Anthropic Messages API that `claude` needs, instead of Ollama. oMLX is not on PyPI, so install it with Homebrew (or the macOS app, as long as it puts `omlx` on PATH):

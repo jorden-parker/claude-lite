@@ -7,6 +7,7 @@ import { renderSettings } from "./settings.ts";
 import { fittingSizes, loadSizes, resolveSize, type Size } from "./sizes.ts";
 import { withJsonOverlay } from "../json-overlay.ts";
 import { withSharedSecrets } from "../sandbox-secrets.ts";
+import { runOpenCode } from "../opencode.ts";
 import { runQwen } from "../qwen.ts";
 
 export type Runner = (argv: string[], env?: Record<string, string | undefined>) => Promise<number>;
@@ -187,6 +188,8 @@ async function launchFrom(
   }
   if (size.qwen)
     return await runQwen({ model: size.model, url: ollamaUrl(), args: claudeArgs }, run);
+  if (size.opencode)
+    return await runOpenCode({ model: size.model, url: ollamaUrl(), args: claudeArgs }, run);
   return await runClaude(
     { dir, home, model: size.model, settings, claudeArgs, url: ollamaUrl() },
     run,

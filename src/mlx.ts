@@ -4,6 +4,7 @@ import { dirname, join } from "node:path";
 import { isRemoteHost, unloadModels } from "./ollama/api.ts";
 import { renderLaunchSettings, type Runner, runClaude, spawnRunner } from "./ollama/launch.ts";
 import { loadSizes, resolveSize, type Size } from "./ollama/sizes.ts";
+import { runOpenCode } from "./opencode.ts";
 import { runQwen } from "./qwen.ts";
 
 const DEFAULT_MLX_PORT = "8435";
@@ -261,6 +262,7 @@ async function runClaudeIn(
   run: Runner,
 ) {
   if (size.qwen) return await runQwen({ model, url: mlxUrl(), args: claudeArgs }, run);
+  if (size.opencode) return await runOpenCode({ model, url: mlxUrl(), args: claudeArgs }, run);
   const dir = mkdtempSync(join(tmpdir(), "claude-lite-mlx-"));
   try {
     return await runClaude({ dir, home, model, settings, claudeArgs, url: mlxUrl() }, run);

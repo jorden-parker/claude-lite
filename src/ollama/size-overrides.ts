@@ -1,12 +1,13 @@
 import type { Size } from "./sizes.ts";
 
 type Env = Record<string, string | undefined>;
-type Switch = "thinking" | "qwen";
+type Switch = "thinking" | "qwen" | "opencode";
 
 export const FLAGS: Record<string, [Switch, boolean]> = {
   "--think": ["thinking", true],
   "--no-think": ["thinking", false],
   "--qwen": ["qwen", true],
+  "--opencode": ["opencode", true],
 };
 
 const THINKING_VALUES: Record<string, boolean> = { on: true, off: false };

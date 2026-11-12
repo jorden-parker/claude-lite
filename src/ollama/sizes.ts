@@ -18,6 +18,7 @@ export type Size = {
   memory_gb?: number;
   mlx?: string;
   qwen?: boolean;
+  opencode?: boolean;
 };
 
 export const PREFERRED_SIZE = "35b";

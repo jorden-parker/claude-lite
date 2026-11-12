@@ -238,6 +238,17 @@ test("--qwen runs qwen against the Ollama /v1 endpoint instead of claude", async
   expect(envs.at(-1).OPENAI_MODEL).toBe(model);
 });
 
+test("--opencode runs opencode on the Ollama /v1 endpoint instead of claude", async () => {
+  const { calls, envs, run } = recorder(false);
+  expect(await launch(home, ["27b", "--opencode", "run", "hi"], run, okApi)).toBe(0);
+  const model = loadSizes(home)["27b"].model;
+  expect(calls.some((argv) => argv[0] === "claude")).toBe(false);
+  expect(calls.at(-1)).toEqual(["opencode", "run", "hi"]);
+  const config = JSON.parse(envs.at(-1).OPENCODE_CONFIG_CONTENT);
+  expect(config.model).toBe(`claude-lite/${model}`);
+  expect(config.providers["claude-lite"].settings.baseURL).toBe(`${ollamaUrl()}/v1`);
+});
+
 test("renderSettings keeps the base sandbox and permissions unchanged", () => {
   const base = { sandbox: { enabled: true }, permissions: { deny: ["x"] } };
   const settings = renderSettings(base, sizeWith({}));

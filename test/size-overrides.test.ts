@@ -69,6 +69,12 @@ test("--qwen sets qwen and is not passed to claude", () => {
   expect(result.claudeArgs).toEqual(["-p", "hi"]);
 });
 
+test("--opencode sets opencode and is not passed to claude", () => {
+  const result = applyFlags(size, ["-p", "--opencode", "hi"]);
+  expect(result.size.opencode).toBe(true);
+  expect(result.claudeArgs).toEqual(["-p", "hi"]);
+});
+
 test("--effort beats CLAUDE_LITE_EFFORT", () => {
   const fromEnv = applyEnv(size, { CLAUDE_LITE_EFFORT: "xhigh" });
   expect(applyFlags(fromEnv, ["--effort", "low"]).size.effort).toBe("low");
