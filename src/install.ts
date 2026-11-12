@@ -14,7 +14,7 @@ import {
 } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { completionPath, completionScript, END, type Shell, START } from "./completion.ts";
-import { mlxLogPath } from "./mlx.ts";
+import { mlxLogPath, readMlxLogHealth } from "./mlx.ts";
 import {
   loadConfigState,
   renderConfig,
@@ -231,6 +231,10 @@ export async function doctor(
 ): Promise<number> {
   const binaryBuilt = existsSync(binaryPath(home));
   const server = await serverStatus(run);
+  const mlxLogFile = mlxLogPath(userHome);
+  const mlxHealth = readMlxLogHealth(
+    existsSync(mlxLogFile) ? readFileSync(mlxLogFile, "utf8") : "",
+  );
   const checks: [string, boolean][] = [
     ["binary built", binaryBuilt],
     ["binary runs", binaryBuilt && (await run([binaryPath(home), "--help"])) === 0],
@@ -241,8 +245,18 @@ export async function doctor(
     [`ollama ${MINIMUM_OLLAMA} or newer`, isSupportedVersion(server.version)],
     ["one ollama startup source", ollamaStartupSources(userHome, systemRoot).length <= 1],
     ["ollama server env set", (await run(["sh", "-c", serverEnvCheck()])) === 0],
+    ["mlx prompt cache in use", mlxHealth.cacheSkipControls.length === 0],
+    ["mlx model memory wired", mlxHealth.modelMemoryMb === undefined],
   ];
   for (const [label, ok] of checks) console.log(`${ok ? "ok  " : "FAIL"} ${label}`);
+  if (mlxHealth.cacheSkipControls.length)
+    console.log(
+      `mlx prompt cache skipped by: ${mlxHealth.cacheSkipControls.join(", ")} (see ${mlxLogFile})`,
+    );
+  if (mlxHealth.modelMemoryMb !== undefined)
+    console.log(
+      `raise the wired limit above ${mlxHealth.modelMemoryMb} MB: sudo sysctl iogpu.wired_limit_mb=${mlxHealth.modelMemoryMb + 1024}`,
+    );
   for (const line of securityPosture(home)) console.log(line);
   return checks.every(([, ok]) => ok) ? 0 : 1;
 }

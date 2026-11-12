@@ -10,7 +10,7 @@ An Ollama launcher for Claude Code, in TypeScript and Bun. Hooks, rules and styl
     cl build                     # compile dist/claude-lite in the lite home
     cl update                    # git pull --ff-only, bun install, build, install
     cl uninstall                 # removes what install added and the server env login agent that cl servers writes
-    cl doctor                    # checks the build, shell completion, the cl link, config files, Ollama version, one startup source and the server env; prints the Ollama sandbox and permission mode
+    cl doctor                    # checks the build, shell completion, the cl link, config files, Ollama version, one startup source and the server env, and the last `cl mlx` log for prompt-cache skips and the wired-memory warning; prints the Ollama sandbox and permission mode
     cl logs                      # follows the Ollama logs (launchd plists or Ollama.app) and the cl mlx log
     cl servers                   # finds duplicate Ollama servers on port 11434; checks the server responds; sets the server env (keep-alive, one parallel request, flash attention, q8 KV cache, one loaded model; flash attention and the q8 KV cache reach only GGUF sizes like `9b`, not the MLX `27b` and `35b`) and writes a login agent that sets it again after a reboot
     cl fix-servers               # keeps Ollama.app; moves leftover Ollama LaunchAgents to ~/.Trash
@@ -78,7 +78,7 @@ Runs the size's `mlx` model (an `mlx-community` 4-bit build named in `config/siz
 1. Checks `127.0.0.1:8435/v1/models` (`CLAUDE_LITE_MLX_PORT` changes the port; 11435 is taken by Ollama's llama.cpp runner). A vllm-mlx already serving the size's model (for example one left by an interrupted run) is reused and keeps running after `claude` exits; stop it with `pkill -f 'vllm-mlx.* serve'`. Anything else on the port stops the launch, and `lsof` names the process.
 2. Downloads the model with `uvx --from huggingface_hub hf download` (cached in `~/.cache/huggingface`; shows progress the first time).
 3. Unloads every model loaded in a local Ollama (`/api/ps`, then `keep_alive: 0`) so they don't share memory with MLX; Ollama being down or idle is fine.
-4. Starts `uvx vllm-mlx@0.6.0 serve` in the background with the Qwen tool and reasoning parsers, a prefix cache capped at 4 entries and 8192 MB, 4096-token prefill steps, no MTP or other flags that turn the prefix cache off, the size's sampling as server defaults, and thinking off unless the size or `--think` turns it on; `preserve_thinking` is always on so earlier turns keep their cached prefix. Its log is `~/.cache/claude-lite/mlx-server.log`.
+4. Starts `uvx vllm-mlx@0.6.0 serve` in the background with the Qwen tool and reasoning parsers, a prefix cache capped at 4 entries and 8192 MB, 4096-token prefill steps, no MTP or other flags that turn the prefix cache off, only the size's temperature and top_p as server defaults (top_k, min_p and the penalties turn the prefix cache off), and thinking off unless the size or `--think` turns it on; `preserve_thinking` is always on so earlier turns keep their cached prefix. Its log is `~/.cache/claude-lite/mlx-server.log`.
 5. Waits for `/v1/models`, runs `claude` with the same settings, system prompt and tools as `cl ollama`, and stops the server when `claude` exits.
 
 The tool and reasoning parsers assume a Qwen 3.5+ model; a size with another model family needs its own parsers. `cl bench` still measures only Ollama.

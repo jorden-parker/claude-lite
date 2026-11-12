@@ -26,6 +26,7 @@ import {
   update,
   build,
 } from "../src/install.ts";
+import { mlxLogPath } from "../src/mlx.ts";
 import type { Runner } from "../src/ollama/launch.ts";
 
 function fixture() {
@@ -216,6 +217,56 @@ test("doctor fails with more than one ollama startup source", async () => {
   touch(join(user, "Library/LaunchAgents/local.ollama.plist"));
   mkdirSync(join(system, "Applications/Ollama.app"), { recursive: true });
   expect(await doctor(user, home, async () => 0, system)).toBe(1);
+});
+
+async function doctorPrinting(user: string, home: string, system: string) {
+  const printed: string[] = [];
+  const originalLog = console.log;
+  console.log = (line: string) => printed.push(line);
+  try {
+    return { code: await doctor(user, home, async () => 0, system), printed };
+  } finally {
+    console.log = originalLog;
+  }
+}
+
+const writeMlxLog = (user: string, text: string) => {
+  touch(mlxLogPath(user));
+  writeFileSync(mlxLogPath(user), text);
+};
+
+test("doctor reports an mlx prompt cache skip with its controls and fails", async () => {
+  const { user, home, system } = await installedHome();
+  writeMlxLog(
+    user,
+    "INFO System KV cache SKIP (stream_chat): request or engine has controls/features the cache branch cannot honor (['top_k', 'stop']); using uncached path",
+  );
+  const { code, printed } = await doctorPrinting(user, home, system);
+  expect(code).toBe(1);
+  expect(printed).toContain("FAIL mlx prompt cache in use");
+  expect(printed.some((line) => line.includes("mlx prompt cache skipped by: top_k, stop"))).toBe(
+    true,
+  );
+});
+
+test("doctor passes the mlx checks when no mlx log exists", async () => {
+  const { user, home, system } = await installedHome();
+  const { code, printed } = await doctorPrinting(user, home, system);
+  expect(code).toBe(0);
+  expect(printed).toContain("ok   mlx prompt cache in use");
+  expect(printed).toContain("ok   mlx model memory wired");
+});
+
+test("doctor reports unwired mlx model memory with the sysctl hint and fails", async () => {
+  const { user, home, system } = await installedHome();
+  writeMlxLog(
+    user,
+    "[WARNING] Generating with a model that requires 21000 MB which is close to the maximum recommended size of 17000 MB.",
+  );
+  const { code, printed } = await doctorPrinting(user, home, system);
+  expect(code).toBe(1);
+  expect(printed).toContain("FAIL mlx model memory wired");
+  expect(printed.some((line) => line.includes("sudo sysctl iogpu.wired_limit_mb="))).toBe(true);
 });
 
 function ollamaRoots() {

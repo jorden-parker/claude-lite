@@ -24,7 +24,7 @@ const QWEN_REASONING_PARSER = "qwen3";
 const PREFIX_TRIE_CACHE_ENTRIES = "4";
 const PREFIX_TRIE_CACHE_MEMORY_MB = "8192";
 const PREFILL_STEP_TOKENS = "4096";
-const SAMPLING = ["temperature", "top_p", "top_k", "min_p", "presence_penalty"];
+const SAMPLING = ["temperature", "top_p"];
 
 type MlxServer = { exited: Promise<number>; stop: () => void };
 
@@ -71,6 +71,22 @@ const DEFAULTS: MlxDependencies = {
 
 export const mlxLogPath = (userHome: string) =>
   join(userHome, ".cache", "claude-lite", "mlx-server.log");
+
+export type MlxLogHealth = { cacheSkipControls: string[]; modelMemoryMb?: number };
+
+export function readMlxLogHealth(logText: string): MlxLogHealth {
+  const controls = new Set<string>();
+  for (const [, list] of logText.matchAll(/KV cache SKIP.*?\[([^\]]*)\]/g))
+    for (const control of list.split(",")) {
+      const name = control.trim().replace(/^['"]|['"]$/g, "");
+      if (name) controls.add(name);
+    }
+  const memory = logText.match(/model that requires (\d+) MB/);
+  return {
+    cacheSkipControls: [...controls],
+    modelMemoryMb: memory ? Number(memory[1]) : undefined,
+  };
+}
 const logPath = () => mlxLogPath(homedir());
 
 function samplingFlags(parameters: Record<string, number> = {}): string[] {

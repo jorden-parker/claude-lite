@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { cpSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { launchMlx, mlxUrl } from "../src/mlx.ts";
+import { launchMlx, mlxUrl, readMlxLogHealth } from "../src/mlx.ts";
 import type { Runner } from "../src/ollama/launch.ts";
 
 const home = join(import.meta.dir, "..");
@@ -117,7 +117,7 @@ test("mlx skips claude when the server exits before it is ready", async () => {
   expect(events.at(-1)).toBe("stop");
 });
 
-test("mlx passes thinking off and the size's sampling as server defaults", async () => {
+test("mlx passes thinking off and only cache-safe sampling as server defaults", async () => {
   const { serverCommands, dependencies } = harness();
   await launchMlx(home, ["35b"], dependencies);
   const server = serverCommands[0];
@@ -126,9 +126,7 @@ test("mlx passes thinking off and the size's sampling as server defaults", async
     '{"enable_thinking":false,"preserve_thinking":true}',
   );
   expect(valueOf("--default-temperature")).toBe("0.7");
-  expect(valueOf("--default-top-k")).toBe("20");
   expect(valueOf("--default-top-p")).toBe("0.8");
-  expect(valueOf("--default-min-p")).toBe("0");
 });
 
 test("mlx --think leaves thinking to the model", async () => {
@@ -159,7 +157,15 @@ test("mlx prefills in 4096-token steps", async () => {
 test("mlx leaves out the flags that turn off vllm-mlx prompt caching", async () => {
   const { serverCommands, dependencies } = harness();
   await launchMlx(home, ["35b"], dependencies);
-  for (const flag of ["--enable-mtp", "--specprefill", "--max-kv-size"])
+  for (const flag of [
+    "--enable-mtp",
+    "--specprefill",
+    "--max-kv-size",
+    "--default-top-k",
+    "--default-min-p",
+    "--default-presence-penalty",
+    "--default-repetition-penalty",
+  ])
     expect(serverCommands[0]).not.toContain(flag);
 });
 
@@ -234,4 +240,27 @@ test("CLAUDE_LITE_MLX_PORT moves the server and claude to that port", async () =
 
 test("mlxUrl rejects a port that is not a number", () => {
   expect(() => mlxUrl({ CLAUDE_LITE_MLX_PORT: "abc" })).toThrow("CLAUDE_LITE_MLX_PORT");
+});
+
+const CACHE_SKIP = (controls: string) =>
+  `INFO System KV cache SKIP (stream_chat): request or engine has controls/features the cache branch cannot honor (${controls}); using uncached path`;
+const WIRED_WARNING =
+  "[WARNING] Generating with a model that requires 21000 MB which is close to the maximum recommended size of 17000 MB. This can be slow.";
+
+test("readMlxLogHealth lists the cache-skip controls in first-seen order without repeats", () => {
+  const log = [CACHE_SKIP("['top_k']"), CACHE_SKIP("['top_k', 'stop']")].join("\n");
+  expect(readMlxLogHealth(log).cacheSkipControls).toEqual(["top_k", "stop"]);
+});
+
+test("readMlxLogHealth reads the model MB from the wired-memory warning", () => {
+  expect(readMlxLogHealth(WIRED_WARNING).modelMemoryMb).toBe(21000);
+});
+
+test("readMlxLogHealth finds nothing in a clean log or an empty string", () => {
+  const clean = "INFO server started\nINFO request completed";
+  for (const log of [clean, ""]) {
+    const health = readMlxLogHealth(log);
+    expect(health.cacheSkipControls).toEqual([]);
+    expect(health.modelMemoryMb).toBeUndefined();
+  }
 });
