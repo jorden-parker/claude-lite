@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { cpSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { launchMlx, MLX_URL } from "../src/mlx.ts";
+import { launchMlx, mlxUrl } from "../src/mlx.ts";
 import type { Runner } from "../src/ollama/launch.ts";
 
 const home = join(import.meta.dir, "..");
@@ -70,13 +70,13 @@ test("mlx downloads, unloads ollama, serves, waits, runs claude, then stops the 
   const claude = calls.at(-1)!;
   expect(claude[claude.indexOf("--model") + 1]).toBe(MODEL_35B);
   expect(claude.slice(-2)).toEqual(["-p", "hi"]);
-  expect(envs.at(-1).ANTHROPIC_BASE_URL).toBe(MLX_URL);
+  expect(envs.at(-1).ANTHROPIC_BASE_URL).toBe(mlxUrl());
   expect(envs.at(-1).ANTHROPIC_API_KEY).toBeUndefined();
-  expect(written[0].env.ANTHROPIC_BASE_URL).toBe(MLX_URL);
+  expect(written[0].env.ANTHROPIC_BASE_URL).toBe(mlxUrl());
   const server = serverCommands[0];
   expect(server).toContain("mlx-community/Qwen3.6-35B-A3B-4bit");
   expect(server[server.indexOf("--tool-call-parser") + 1]).toBe("qwen3_xml");
-  expect(server[server.indexOf("--port") + 1]).toBe(new URL(MLX_URL).port);
+  expect(server[server.indexOf("--port") + 1]).toBe(new URL(mlxUrl()).port);
 });
 
 test("mlx reuses a server already serving the size's model and leaves it running", async () => {
@@ -97,7 +97,7 @@ test("mlx names what holds the port when it serves something else", async () => 
     console.error = original;
   }
   expect(events).toEqual(["probe", "lsof"]);
-  expect(calls[0]).toContain(`-iTCP:${new URL(MLX_URL).port}`);
+  expect(calls[0]).toContain(`-iTCP:${new URL(mlxUrl()).port}`);
   expect(errors[0]).toContain("other-model");
 });
 
@@ -173,5 +173,28 @@ test("mlx --print-config prints the server command and settings without running"
   expect(calls).toEqual([]);
   expect(events).toEqual([]);
   expect(lines[0]).toContain("vllm-mlx");
-  expect(JSON.parse(lines[1]).env.ANTHROPIC_BASE_URL).toBe(MLX_URL);
+  expect(JSON.parse(lines[1]).env.ANTHROPIC_BASE_URL).toBe(mlxUrl());
+});
+
+test("mlx defaults to port 8435, clear of Ollama's runner on 11435", () => {
+  expect(mlxUrl({})).toBe("http://127.0.0.1:8435");
+});
+
+test("CLAUDE_LITE_MLX_PORT moves the server and claude to that port", async () => {
+  const previous = process.env.CLAUDE_LITE_MLX_PORT;
+  process.env.CLAUDE_LITE_MLX_PORT = "9123";
+  try {
+    const { envs, serverCommands, dependencies } = harness();
+    expect(await launchMlx(home, ["35b"], dependencies)).toBe(0);
+    const server = serverCommands[0];
+    expect(server[server.indexOf("--port") + 1]).toBe("9123");
+    expect(envs.at(-1).ANTHROPIC_BASE_URL).toBe("http://127.0.0.1:9123");
+  } finally {
+    if (previous === undefined) delete process.env.CLAUDE_LITE_MLX_PORT;
+    else process.env.CLAUDE_LITE_MLX_PORT = previous;
+  }
+});
+
+test("mlxUrl rejects a port that is not a number", () => {
+  expect(() => mlxUrl({ CLAUDE_LITE_MLX_PORT: "abc" })).toThrow("CLAUDE_LITE_MLX_PORT");
 });

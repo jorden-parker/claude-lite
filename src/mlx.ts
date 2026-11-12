@@ -5,8 +5,16 @@ import { isRemoteHost, unloadModels } from "./ollama/api.ts";
 import { renderLaunchSettings, type Runner, runClaude, spawnRunner } from "./ollama/launch.ts";
 import { resolveSize, type Size } from "./ollama/sizes.ts";
 
-export const MLX_URL = "http://127.0.0.1:11435";
-const MLX_PORT = new URL(MLX_URL).port;
+const DEFAULT_MLX_PORT = "8435";
+
+export function mlxUrl(env: Record<string, string | undefined> = process.env): string {
+  const port = env.CLAUDE_LITE_MLX_PORT?.trim() || DEFAULT_MLX_PORT;
+  if (!/^\d{1,5}$/.test(port))
+    throw new Error(`CLAUDE_LITE_MLX_PORT must be a port number, not ${port}`);
+  return `http://127.0.0.1:${port}`;
+}
+
+const mlxPort = () => new URL(mlxUrl()).port;
 const STOP_HINT = "pkill -f 'vllm-mlx.* serve'";
 const VLLM_MLX = "vllm-mlx@0.6.0";
 const PYTHON = "3.12";
@@ -37,7 +45,7 @@ function spawnServer(argv: string[], logPath: string): MlxServer {
 async function fetchServedModels(): Promise<string[] | null> {
   let response: Response;
   try {
-    response = await fetch(`${MLX_URL}/v1/models`, { signal: AbortSignal.timeout(2000) });
+    response = await fetch(`${mlxUrl()}/v1/models`, { signal: AbortSignal.timeout(2000) });
   } catch {
     return null;
   }
@@ -76,7 +84,7 @@ function serverCommand(size: Size, model: string): string[] {
     "--host",
     "127.0.0.1",
     "--port",
-    MLX_PORT,
+    mlxPort(),
     "--enable-auto-tool-choice",
     "--tool-call-parser",
     QWEN_TOOL_PARSER,
@@ -122,7 +130,7 @@ export async function launchMlx(
     console.error(`size ${name} has no mlx model; add "mlx" to it in config/sizes.json`);
     return 1;
   }
-  const settings = renderLaunchSettings(home, { ...size, model }, MLX_URL);
+  const settings = renderLaunchSettings(home, { ...size, model }, mlxUrl());
   const command = serverCommand(size, model);
   if (isPrintOnly) {
     console.log(command.join(" "));
@@ -132,16 +140,16 @@ export async function launchMlx(
   const alreadyServed = await servedModels();
   if (alreadyServed?.includes(model)) {
     console.log(
-      `reusing the vllm-mlx already serving ${model} on ${MLX_URL}; it keeps running after claude exits (stop it: ${STOP_HINT})`,
+      `reusing the vllm-mlx already serving ${model} on ${mlxUrl()}; it keeps running after claude exits (stop it: ${STOP_HINT})`,
     );
     await unloadOllama(unload);
     return await runClaudeIn(home, model, settings, claudeArgs, run);
   }
   if (alreadyServed !== null) {
     console.error(
-      `${MLX_URL} already serves ${alreadyServed.join(", ") || "something that is not vllm-mlx"}, not ${model}; free port ${MLX_PORT} (stop a leftover vllm-mlx: ${STOP_HINT})`,
+      `${mlxUrl()} already serves ${alreadyServed.join(", ") || "something that is not vllm-mlx"}, not ${model}; free port ${mlxPort()} (stop a leftover vllm-mlx: ${STOP_HINT})`,
     );
-    await run(["lsof", "-nP", `-iTCP:${MLX_PORT}`, "-sTCP:LISTEN"]);
+    await run(["lsof", "-nP", `-iTCP:${mlxPort()}`, "-sTCP:LISTEN"]);
     return 1;
   }
   if (
@@ -186,7 +194,7 @@ async function runClaudeIn(
 ) {
   const dir = mkdtempSync(join(tmpdir(), "claude-lite-mlx-"));
   try {
-    return await runClaude({ dir, home, model, settings, claudeArgs, url: MLX_URL }, run);
+    return await runClaude({ dir, home, model, settings, claudeArgs, url: mlxUrl() }, run);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
