@@ -23,6 +23,7 @@ const PYTHON = "3.12";
 const OMLX_INSTALL_HINT =
   "brew tap jundot/omlx https://github.com/jundot/omlx && brew install jundot/omlx/omlx --with-custom-kernel (needs full Xcode; without it: brew install jundot/omlx/omlx)";
 const SERVER_SSD_CACHE = "20GB";
+const MEMORY_GUARD_TIER = "aggressive";
 const SAMPLING = ["temperature", "top_p", "top_k", "min_p", "presence_penalty"];
 const CACHE_STORED = "Using boundary cache snapshot for";
 const CACHE_SKIP_REASON = /Skipping cache store.*reason=(\w+)/;
@@ -136,6 +137,8 @@ function serverCommand(dataDir: string): string[] {
     mlxPort(),
     "--paged-ssd-cache-max-size",
     SERVER_SSD_CACHE,
+    "--memory-guard",
+    MEMORY_GUARD_TIER,
   ];
 }
 

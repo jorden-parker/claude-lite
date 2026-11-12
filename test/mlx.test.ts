@@ -133,7 +133,15 @@ test("mlx serves the size's model with oMLX on the mlx port", async () => {
     new URL(mlxUrl()).port,
     "--paged-ssd-cache-max-size",
     "20GB",
+    "--memory-guard",
+    "aggressive",
   ]);
+});
+
+test("mlx lets oMLX use most of RAM so the 35b fits under the memory guard's dynamic ceiling", async () => {
+  const { serverCommands, dependencies } = harness();
+  await launchMlx(home, ["35b"], dependencies);
+  expect(serverCommands[0].slice(-2)).toEqual(["--memory-guard", "aggressive"]);
 });
 
 test("mlx writes the model settings into the oMLX data dir before the server starts", async () => {
