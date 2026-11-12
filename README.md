@@ -15,7 +15,7 @@ An Ollama launcher for Claude Code, in TypeScript and Bun. Hooks, rules and styl
     cl servers                   # finds duplicate Ollama servers on port 11434; checks the server responds; sets the server env (keep-alive, one parallel request, flash attention, q8 KV cache, one loaded model; flash attention and the q8 KV cache reach only GGUF sizes like `9b`, not the MLX `27b` and `35b`) and writes a login agent that sets it again after a reboot
     cl stop                      # kills the cl mlx oMLX server and every Ollama process (reopen Ollama before cl ollama)
     cl fix-servers               # keeps Ollama.app; moves leftover Ollama LaunchAgents to ~/.Trash
-    cl config                    # screen for the Ollama default size, thinking, effort, output tokens, sandbox, permission mode and system prompt
+    cl config                    # screen for the default size, sandbox, permission mode, system prompt, and every size's thinking, effort, output tokens and client
     cl ollama [size]             # launches Claude Code on a local model (see below)
     cl mlx [size]                # same, but the model runs on oMLX instead of Ollama
     cl bench [size]              # measures a size's model: tool-use quality on fixed tasks, tokens/s, load time

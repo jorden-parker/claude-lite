@@ -15,7 +15,7 @@ export type ConfigState = {
 };
 
 type ConfigRow = {
-  section: "Ollama";
+  section: string;
   label: string;
   value: string;
   choices: readonly string[];
@@ -29,6 +29,7 @@ const OLLAMA_EFFORTS = ["unset", ...EFFORT_LEVELS];
 const PERMISSION_MODES = ["default", "acceptEdits", "plan", "auto", "bypassPermissions"];
 const SWITCH_CHOICES = ["off", "on"];
 const OUTPUT_TOKEN_LIMITS = [4096, 8192, 16384, 32768];
+const CLIENTS = ["claude", "qwen", "opencode"];
 const ENTER_KEY = "\r";
 const UNSET_VALUES = new Set(["default", "unset"]);
 const LABEL_WIDTH = 20;
@@ -45,15 +46,12 @@ function withKey(object: JsonObject, key: string, value: unknown): JsonObject {
 const findMarkedSize = (state: ConfigState) =>
   Object.keys(state.sizesOverlay).find((name) => state.sizesOverlay[name].default === true);
 
-const resolveChosenSize = (state: ConfigState) => findMarkedSize(state) ?? state.automaticSize;
-
 const mergeSizeSettings = (state: ConfigState, name: string) => ({
   ...state.baseSizes[name],
   ...state.sizesOverlay[name],
 });
 
-function withSizeKey(state: ConfigState, key: string, value: unknown): ConfigState {
-  const name = resolveChosenSize(state);
+function withSizeKey(state: ConfigState, name: string, key: string, value: unknown): ConfigState {
   const sizeOverlay = withKey(state.sizesOverlay[name] ?? {}, key, value);
   return { ...state, sizesOverlay: { ...state.sizesOverlay, [name]: sizeOverlay } };
 }
@@ -133,9 +131,53 @@ function withDefaultSize(state: ConfigState, name: string): ConfigState {
 const listOutputTokenChoices = (current: number) =>
   [...new Set([...OUTPUT_TOKEN_LIMITS, current])].sort((first, second) => first - second);
 
+const describeClient = (size: Partial<Size>) =>
+  size.qwen ? "qwen" : size.opencode ? "opencode" : "claude";
+
+function withClient(state: ConfigState, name: string, client: string): ConfigState {
+  const withoutQwen = withSizeKey(state, name, "qwen", client === "qwen" ? true : "unset");
+  return withSizeKey(withoutQwen, name, "opencode", client === "opencode" ? true : "unset");
+}
+
+const describeSizeModels = (name: string, size: Size) =>
+  [name, `ollama ${size.base}`, ...(size.mlx ? [`mlx ${size.mlx}`] : [])].join(" · ");
+
+function buildSizeRows(state: ConfigState, name: string): ConfigRow[] {
+  const sizeSettings = mergeSizeSettings(state, name);
+  const section = describeSizeModels(name, sizeSettings);
+  return [
+    {
+      section,
+      label: "Thinking",
+      value: describeSwitch(sizeSettings.thinking),
+      choices: SWITCH_CHOICES,
+      choose: (current, value) => withSizeKey(current, name, "thinking", value === "on"),
+    },
+    {
+      section,
+      label: "Effort",
+      value: sizeSettings.effort ?? "unset",
+      choices: OLLAMA_EFFORTS,
+      choose: (current, value) => withSizeKey(current, name, "effort", value),
+    },
+    {
+      section,
+      label: "Output tokens",
+      value: String(sizeSettings.output_tokens),
+      choices: listOutputTokenChoices(sizeSettings.output_tokens).map(String),
+      choose: (current, value) => withSizeKey(current, name, "output_tokens", Number(value)),
+    },
+    {
+      section,
+      label: "Client",
+      value: describeClient(sizeSettings),
+      choices: CLIENTS,
+      choose: (current, value) => withClient(current, name, value),
+    },
+  ];
+}
+
 function buildConfigRows(state: ConfigState): ConfigRow[] {
-  const size = resolveChosenSize(state);
-  const sizeSettings = mergeSizeSettings(state, size);
   const automaticChoice = `auto (${state.automaticSize})`;
   return [
     {
@@ -145,29 +187,9 @@ function buildConfigRows(state: ConfigState): ConfigRow[] {
       choices: [automaticChoice, ...Object.keys(state.baseSizes)],
       choose: withDefaultSize,
     },
-    {
-      section: "Ollama",
-      label: `Thinking (${size})`,
-      value: describeSwitch(sizeSettings.thinking),
-      choices: SWITCH_CHOICES,
-      choose: (current, value) => withSizeKey(current, "thinking", value === "on"),
-    },
-    {
-      section: "Ollama",
-      label: `Effort (${size})`,
-      value: sizeSettings.effort ?? "unset",
-      choices: OLLAMA_EFFORTS,
-      choose: (current, value) => withSizeKey(current, "effort", value),
-    },
-    {
-      section: "Ollama",
-      label: `Output tokens (${size})`,
-      value: String(sizeSettings.output_tokens),
-      choices: listOutputTokenChoices(sizeSettings.output_tokens).map(String),
-      choose: (current, value) => withSizeKey(current, "output_tokens", Number(value)),
-    },
     ...buildSandboxAndPermissionRows(state),
     buildEditRow("System prompt", "system-prompt.md"),
+    ...Object.keys(state.baseSizes).flatMap((name) => buildSizeRows(state, name)),
   ];
 }
 

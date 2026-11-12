@@ -31,7 +31,7 @@ const sizeWith = (overrides: Partial<Size>): Size => ({
 const initialState: ConfigState = {
   ollamaOverlay: {},
   ollamaBase: { sandbox: { enabled: true } },
-  baseSizes: { "27b": sizeWith({}), "9b": sizeWith({ thinking: true }) },
+  baseSizes: { "27b": sizeWith({}), "9b": sizeWith({ thinking: true, mlx: "org/nine" }) },
   sizesOverlay: {},
   automaticSize: "27b",
   cursor: 0,
@@ -39,12 +39,15 @@ const initialState: ConfigState = {
 
 const ROW_INDEX = {
   defaultSize: 0,
-  thinking: 1,
-  ollamaEffort: 2,
-  outputTokens: 3,
-  ollamaSandbox: 4,
-  ollamaPermissionMode: 5,
-  systemPrompt: 6,
+  ollamaSandbox: 1,
+  ollamaPermissionMode: 2,
+  systemPrompt: 3,
+  thinking: 4,
+  ollamaEffort: 5,
+  outputTokens: 6,
+  client: 7,
+  smallThinking: 8,
+  lastRow: 11,
 };
 
 const pressAll = (state: ConfigState, keys: string[]) =>
@@ -56,19 +59,34 @@ const pressOnRow = (state: ConfigState, row: number, keys: string[]) =>
 const screenLine = (cursorMarker: string, label: string, value: string) =>
   `${cursorMarker} ${label.padEnd(20)}${value}`;
 
-test("renders every ollama setting with the current values and the cursor", () => {
+test("renders every setting of every size with the current values and the cursor", () => {
   expect(renderConfig(initialState)).toContain(
     [
       "Ollama",
       screenLine(">", "Default size", "auto (27b)"),
-      screenLine(" ", "Thinking (27b)", "off"),
-      screenLine(" ", "Effort (27b)", "unset"),
-      screenLine(" ", "Output tokens (27b)", "10"),
       screenLine(" ", "Sandbox", "on"),
       screenLine(" ", "Permission mode", "default"),
       screenLine(" ", "System prompt", "config/system-prompt.md ↵"),
+      "27b · ollama b",
+      screenLine(" ", "Thinking", "off"),
+      screenLine(" ", "Effort", "unset"),
+      screenLine(" ", "Output tokens", "10"),
+      screenLine(" ", "Client", "claude"),
+      "9b · ollama b · mlx org/nine",
+      screenLine(" ", "Thinking", "on"),
+      screenLine(" ", "Effort", "unset"),
+      screenLine(" ", "Output tokens", "10"),
+      screenLine(" ", "Client", "claude"),
     ].join("\n"),
   );
+});
+
+test("client cycles through qwen and opencode in the size overlay and back to claude", () => {
+  const qwen = pressOnRow(initialState, ROW_INDEX.client, [RIGHT]);
+  expect(qwen.sizesOverlay["27b"]).toEqual({ qwen: true });
+  const opencode = pressAll(qwen, [RIGHT]);
+  expect(opencode.sizesOverlay["27b"]).toEqual({ opencode: true });
+  expect(pressAll(opencode, [RIGHT]).sizesOverlay["27b"]).toEqual({});
 });
 
 test("the screen has no Claude rows", () => {
@@ -102,11 +120,9 @@ test("the footer explains that enter opens file rows", () => {
   expect(renderConfig(initialState)).toContain("↵ edit file");
 });
 
-test("size rows follow the chosen default size", () => {
-  const state = pressOnRow(initialState, ROW_INDEX.defaultSize, [RIGHT, RIGHT]);
-  expect(renderConfig(state)).toContain(screenLine(" ", "Thinking (9b)", "on"));
-  const toggled = pressAll(state, [DOWN, RIGHT]);
-  expect(toggled.sizesOverlay["9b"]).toEqual({ default: true, thinking: false });
+test("each size's rows change only that size, whatever the default size", () => {
+  const toggled = pressOnRow(initialState, ROW_INDEX.smallThinking, [RIGHT]);
+  expect(toggled.sizesOverlay).toEqual({ "9b": { thinking: false } });
 });
 
 test("ollama effort cycles from unset and back to unset removes the key", () => {
@@ -145,7 +161,7 @@ test("splitKeys separates arrow sequences, escape and plain keys that arrive tog
 
 test("the cursor stays inside the rows", () => {
   expect(pressAll(initialState, [UP]).cursor).toBe(0);
-  expect(pressAll(initialState, Array(20).fill(DOWN)).cursor).toBe(ROW_INDEX.systemPrompt);
+  expect(pressAll(initialState, Array(20).fill(DOWN)).cursor).toBe(ROW_INDEX.lastRow);
 });
 
 test("q and escape save, ctrl-c cancels, other keys keep going", () => {
