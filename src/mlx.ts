@@ -21,7 +21,8 @@ const VLLM_MLX = "vllm-mlx@0.6.0";
 const PYTHON = "3.12";
 const QWEN_TOOL_PARSER = "qwen3_xml";
 const QWEN_REASONING_PARSER = "qwen3";
-const PREFIX_CACHE_MEMORY_MB = "8192";
+const PREFIX_TRIE_CACHE_ENTRIES = "4";
+const PREFIX_TRIE_CACHE_MEMORY_MB = "8192";
 const PREFILL_STEP_TOKENS = "4096";
 const SAMPLING = ["temperature", "top_p", "top_k", "min_p", "presence_penalty"];
 
@@ -111,12 +112,12 @@ function serverCommand(size: Size, model: string): string[] {
     QWEN_TOOL_PARSER,
     "--reasoning-parser",
     QWEN_REASONING_PARSER,
-    "--continuous-batching",
-    "--cache-memory-mb",
-    PREFIX_CACHE_MEMORY_MB,
+    "--prefix-trie-cache",
+    "--prefix-trie-cache-size",
+    PREFIX_TRIE_CACHE_ENTRIES,
+    "--prefix-trie-cache-memory-mb",
+    PREFIX_TRIE_CACHE_MEMORY_MB,
     "--prefill-step-size",
-    PREFILL_STEP_TOKENS,
-    "--mllm-prefill-step-size",
     PREFILL_STEP_TOKENS,
     "--default-chat-template-kwargs",
     JSON.stringify(
