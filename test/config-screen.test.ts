@@ -59,24 +59,51 @@ const pressOnRow = (state: ConfigState, row: number, keys: string[]) =>
 const screenLine = (cursorMarker: string, label: string, value: string) =>
   `${cursorMarker} ${label.padEnd(20)}${value}`;
 
-test("renders every setting of every size with the current values and the cursor", () => {
+const rowWithBackends = (label: string, value: string, backends: string) =>
+  `  ${label.padEnd(20)}${value.padEnd(10)}${backends}`;
+
+test("renders every setting of every size with the backends each one reaches", () => {
   expect(renderConfig(initialState)).toContain(
     [
-      "Ollama",
+      "Ollama and MLX",
       screenLine(">", "Default size", "auto (27b)"),
       screenLine(" ", "Sandbox", "on"),
       screenLine(" ", "Permission mode", "default"),
       screenLine(" ", "System prompt", "config/system-prompt.md ↵"),
-      "27b · ollama b",
-      screenLine(" ", "Thinking", "off"),
-      screenLine(" ", "Effort", "unset"),
-      screenLine(" ", "Output tokens", "10"),
-      screenLine(" ", "Client", "claude"),
-      "9b · ollama b · mlx org/nine",
-      screenLine(" ", "Thinking", "on"),
-      screenLine(" ", "Effort", "unset"),
-      screenLine(" ", "Output tokens", "10"),
-      screenLine(" ", "Client", "claude"),
+      "27b",
+      "  ollama  m (from b)",
+      rowWithBackends("Thinking", "off", "ollama"),
+      rowWithBackends("Effort", "unset", "ollama"),
+      rowWithBackends("Output tokens", "10", "ollama"),
+      rowWithBackends("Client", "claude", "ollama"),
+      "9b",
+      "  ollama  m (from b)",
+      "  mlx     org/nine",
+      rowWithBackends("Thinking", "on", "ollama, mlx"),
+      rowWithBackends("Effort", "unset", "ollama, mlx"),
+      rowWithBackends("Output tokens", "10", "ollama, mlx"),
+      rowWithBackends("Client", "claude", "ollama, mlx"),
+    ].join("\n"),
+  );
+});
+
+test("with qwen or opencode, thinking reaches only oMLX and effort reaches nothing", () => {
+  const sizesOverlay = { "27b": { qwen: true }, "9b": { opencode: true } };
+  const screen = renderConfig({ ...initialState, sizesOverlay });
+  expect(screen).toContain(
+    [
+      "  ollama  m (from b)",
+      rowWithBackends("Thinking", "off", "unused"),
+      rowWithBackends("Effort", "unset", "unused"),
+      rowWithBackends("Output tokens", "10", "ollama"),
+    ].join("\n"),
+  );
+  expect(screen).toContain(
+    [
+      "  mlx     org/nine",
+      rowWithBackends("Thinking", "on", "mlx"),
+      rowWithBackends("Effort", "unset", "unused"),
+      rowWithBackends("Output tokens", "10", "ollama, mlx"),
     ].join("\n"),
   );
 });

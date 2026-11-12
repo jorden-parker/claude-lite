@@ -21,6 +21,7 @@ type ConfigRow = {
   choices: readonly string[];
   choose: (state: ConfigState, value: string) => ConfigState;
   editFile?: string;
+  backends?: string;
 };
 
 type KeyOutcome = { state: ConfigState; exit?: "save" | "cancel"; edit?: string };
@@ -33,6 +34,8 @@ const CLIENTS = ["claude", "qwen", "opencode"];
 const ENTER_KEY = "\r";
 const UNSET_VALUES = new Set(["default", "unset"]);
 const LABEL_WIDTH = 20;
+const VALUE_WIDTH = 10;
+const SHARED_SECTION = "Ollama and MLX";
 const CURSOR_MOVES_BY_KEY: Record<string, number> = { "\x1b[A": -1, k: -1, "\x1b[B": 1, j: 1 };
 const VALUE_STEPS_BY_KEY: Record<string, number> = { "\x1b[C": 1, "\r": 1, " ": 1, "\x1b[D": -1 };
 const SAVE_KEYS = new Set(["q", "\x1b"]);
@@ -80,7 +83,7 @@ function withPermissionMode(state: ConfigState, mode: string): ConfigState {
 function buildSandboxAndPermissionRows(state: ConfigState): ConfigRow[] {
   return [
     {
-      section: "Ollama",
+      section: SHARED_SECTION,
       label: "Sandbox",
       value: describeSwitch(
         state.ollamaOverlay.sandbox?.enabled ?? state.ollamaBase.sandbox?.enabled,
@@ -93,7 +96,7 @@ function buildSandboxAndPermissionRows(state: ConfigState): ConfigRow[] {
         }),
     },
     {
-      section: "Ollama",
+      section: SHARED_SECTION,
       label: "Permission mode",
       value:
         state.ollamaOverlay.permissions?.defaultMode ??
@@ -106,7 +109,7 @@ function buildSandboxAndPermissionRows(state: ConfigState): ConfigRow[] {
 }
 
 const buildEditRow = (label: string, editFile: string): ConfigRow => ({
-  section: "Ollama",
+  section: SHARED_SECTION,
   label,
   value: `config/${editFile} ↵`,
   choices: [],
@@ -140,11 +143,29 @@ function withClient(state: ConfigState, name: string, client: string): ConfigSta
 }
 
 const describeSizeModels = (name: string, size: Size) =>
-  [name, `ollama ${size.base}`, ...(size.mlx ? [`mlx ${size.mlx}`] : [])].join(" · ");
+  [
+    name,
+    `  ollama  ${size.model} (from ${size.base})`,
+    ...(size.mlx ? [`  mlx     ${size.mlx}`] : []),
+  ].join("\n");
+
+const describeBackends = (backends: string[]) => backends.join(", ") || "unused";
+
+function listReachedBackends(size: Size) {
+  const allBackends = ["ollama", ...(size.mlx ? ["mlx"] : [])];
+  const isClaudeClient = describeClient(size) === "claude";
+  const serverSideThinking = size.mlx ? ["mlx"] : [];
+  return {
+    all: describeBackends(allBackends),
+    thinking: describeBackends(isClaudeClient ? allBackends : serverSideThinking),
+    effort: describeBackends(isClaudeClient ? allBackends : []),
+  };
+}
 
 function buildSizeRows(state: ConfigState, name: string): ConfigRow[] {
   const sizeSettings = mergeSizeSettings(state, name);
   const section = describeSizeModels(name, sizeSettings);
+  const reached = listReachedBackends(sizeSettings);
   return [
     {
       section,
@@ -152,6 +173,7 @@ function buildSizeRows(state: ConfigState, name: string): ConfigRow[] {
       value: describeSwitch(sizeSettings.thinking),
       choices: SWITCH_CHOICES,
       choose: (current, value) => withSizeKey(current, name, "thinking", value === "on"),
+      backends: reached.thinking,
     },
     {
       section,
@@ -159,6 +181,7 @@ function buildSizeRows(state: ConfigState, name: string): ConfigRow[] {
       value: sizeSettings.effort ?? "unset",
       choices: OLLAMA_EFFORTS,
       choose: (current, value) => withSizeKey(current, name, "effort", value),
+      backends: reached.effort,
     },
     {
       section,
@@ -166,6 +189,7 @@ function buildSizeRows(state: ConfigState, name: string): ConfigRow[] {
       value: String(sizeSettings.output_tokens),
       choices: listOutputTokenChoices(sizeSettings.output_tokens).map(String),
       choose: (current, value) => withSizeKey(current, name, "output_tokens", Number(value)),
+      backends: reached.all,
     },
     {
       section,
@@ -173,6 +197,7 @@ function buildSizeRows(state: ConfigState, name: string): ConfigRow[] {
       value: describeClient(sizeSettings),
       choices: CLIENTS,
       choose: (current, value) => withClient(current, name, value),
+      backends: reached.all,
     },
   ];
 }
@@ -181,7 +206,7 @@ function buildConfigRows(state: ConfigState): ConfigRow[] {
   const automaticChoice = `auto (${state.automaticSize})`;
   return [
     {
-      section: "Ollama",
+      section: SHARED_SECTION,
       label: "Default size",
       value: findMarkedSize(state) ?? automaticChoice,
       choices: [automaticChoice, ...Object.keys(state.baseSizes)],
@@ -198,7 +223,8 @@ export function renderConfig(state: ConfigState): string {
   buildConfigRows(state).forEach((row, index, rows) => {
     if (rows[index - 1]?.section !== row.section) lines.push(row.section);
     const cursorMarker = index === state.cursor ? ">" : " ";
-    lines.push(`${cursorMarker} ${row.label.padEnd(LABEL_WIDTH)}${row.value}`);
+    const value = row.backends ? row.value.padEnd(VALUE_WIDTH) + row.backends : row.value;
+    lines.push(`${cursorMarker} ${row.label.padEnd(LABEL_WIDTH)}${value}`);
   });
   return `${lines.join("\n")}\n\n↑↓ move · ←→ change · ↵ edit file · q save · ctrl-c cancel`;
 }
