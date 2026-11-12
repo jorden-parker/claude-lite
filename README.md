@@ -10,14 +10,14 @@ An Ollama launcher for Claude Code, in TypeScript and Bun. Hooks, rules and styl
     cl build                     # compile dist/claude-lite in the lite home
     cl update                    # git pull --ff-only, bun install, build, install
     cl uninstall                 # removes what install added and the server env login agent that cl servers writes
-    cl doctor                    # checks the build, shell completion, the cl link, config files, Ollama version, one startup source and the server env, and the last `cl mlx` log for prompt-cache skips and the wired-memory warning; prints the Ollama sandbox and permission mode
+    cl doctor                    # checks the build, shell completion, the cl link, config files, Ollama version, one startup source and the server env, and the last `cl mlx` log, which fails when oMLX stored no prompt cache; prints the Ollama sandbox and permission mode
     cl logs                      # follows the Ollama logs (launchd plists or Ollama.app) and the cl mlx log
     cl servers                   # finds duplicate Ollama servers on port 11434; checks the server responds; sets the server env (keep-alive, one parallel request, flash attention, q8 KV cache, one loaded model; flash attention and the q8 KV cache reach only GGUF sizes like `9b`, not the MLX `27b` and `35b`) and writes a login agent that sets it again after a reboot
-    cl stop                      # kills the cl mlx vllm-mlx server and every Ollama process (reopen Ollama before cl ollama)
+    cl stop                      # kills the cl mlx oMLX server and every Ollama process (reopen Ollama before cl ollama)
     cl fix-servers               # keeps Ollama.app; moves leftover Ollama LaunchAgents to ~/.Trash
     cl config                    # screen for the Ollama default size, thinking, effort, output tokens, sandbox, permission mode and system prompt
     cl ollama [size]             # launches Claude Code on a local model (see below)
-    cl mlx [size]                # same, but the model runs on vllm-mlx instead of Ollama
+    cl mlx [size]                # same, but the model runs on oMLX instead of Ollama
     cl bench [size]              # measures a size's model: tool-use quality on fixed tasks, tokens/s, load time
     cl <command> --help          # usage for one command
 
@@ -72,17 +72,30 @@ Qwen Code runs without claude-lite's permissions, sandbox, secret denies and sys
 ## Launch on MLX directly
 
     claude-lite mlx [27b|35b|9b] [--print-config] [--think|--no-think] [--qwen] [--effort <level>] [claude args]
-    claude-lite mlx 35b --print-config   # print the server command + settings, no launch
+    claude-lite mlx 35b --print-config   # print the server command, model settings and settings, no launch
 
-Runs the size's `mlx` model (an `mlx-community` 4-bit build named in `config/sizes.json`) through [vllm-mlx](https://github.com/waybarrios/vllm-mlx), which serves the Anthropic Messages API that `claude` needs, instead of Ollama. Needs [uv](https://docs.astral.sh/uv/); nothing is installed into the repo.
+Runs the size's `mlx` model (an `mlx-community` 4-bit build named in `config/sizes.json`) through [oMLX](https://github.com/jundot/omlx) 0.7.3 or newer, which serves the Anthropic Messages API that `claude` needs, instead of Ollama. oMLX is not on PyPI, so install it with Homebrew (or the macOS app, as long as it puts `omlx` on PATH):
 
-1. Checks `127.0.0.1:8435/v1/models` (`CLAUDE_LITE_MLX_PORT` changes the port; 11435 is taken by Ollama's llama.cpp runner). A vllm-mlx already serving the size's model (for example one left by an interrupted run) is reused and keeps running after `claude` exits; stop it with `cl stop`. Anything else on the port stops the launch, and `lsof` names the process.
-2. Downloads the model with `uvx --from huggingface_hub hf download` (cached in `~/.cache/huggingface`; shows progress the first time).
+    brew tap jundot/omlx https://github.com/jundot/omlx
+    brew install jundot/omlx/omlx --with-custom-kernel   # needs full Xcode
+    brew install jundot/omlx/omlx                        # without Xcode: Qwen3.5-family models silently run on a much slower generic path
+
+Check that a Homebrew install has the kernels with `/opt/homebrew/opt/omlx/libexec/bin/python -c "from omlx.custom_kernels import native_kernel_status; print(native_kernel_status())"`. Nothing is installed into the repo.
+
+1. Checks that `omlx` is on PATH, then `127.0.0.1:8435/v1/models` (`CLAUDE_LITE_MLX_PORT` changes the port; 11435 is taken by Ollama's llama.cpp runner). An oMLX already serving the size's model (for example one left by an interrupted run) is reused and keeps running after `claude` exits; stop it with `cl stop`. Anything else on the port stops the launch, and `lsof` names the process.
+2. Downloads the model with `uvx --from huggingface_hub hf download` (cached in `~/.cache/huggingface`; shows progress the first time). oMLX reads that Hugging Face cache and serves the model under the id `org--name`, the repo id with each `/` replaced by `--` (for example `mlx-community--Qwen3.6-35B-A3B-4bit`); `claude` and `qwen` are given that id.
 3. Unloads every model loaded in a local Ollama (`/api/ps`, then `keep_alive: 0`) so they don't share memory with MLX; Ollama being down or idle is fine.
-4. Starts `uvx vllm-mlx@0.6.0 serve` in the background with the Qwen tool and reasoning parsers, a prefix cache capped at 4 entries and 8192 MB, 4096-token prefill steps, no MTP or other flags that turn the prefix cache off, the size's sampling as server defaults, and thinking off unless the size or `--think` turns it on; `preserve_thinking` is always on so earlier turns keep their cached prefix. Its log is `~/.cache/claude-lite/mlx-server.log`.
-5. Waits for `/v1/models`, runs `claude` with the same settings, system prompt and tools as `cl ollama`, and stops the server when `claude` exits.
+4. Writes `~/.cache/claude-lite/omlx/model_settings.json` with an entry for every mlx size, keyed by that id: its context, output tokens and sampling, with `force_sampling` on so the size's sampling wins over what `claude` sends, and thinking from the size or `--think`/`--no-think`. The file is rewritten on every start, so edits to it or in the oMLX admin UI are overwritten; change the size in `config/sizes.json` or `config/local-sizes.json` instead.
+5. Starts `omlx serve --base-path ~/.cache/claude-lite/omlx --host 127.0.0.1 --port 8435 --paged-ssd-cache-max-size 20GB` in the background. The data dir holds the settings and the SSD prompt cache, capped at 20 GB. The server log is `~/.cache/claude-lite/mlx-server.log`.
+6. Waits for `/v1/models` to list the id (if it does not, the model is not an MLX model in the Hugging Face cache and the launch stops), runs `claude` with the same settings, system prompt and tools as `cl ollama`, and stops the server when `claude` exits.
 
-The tool and reasoning parsers assume a Qwen 3.5+ model; a size with another model family needs its own parsers. `cl bench` still measures only Ollama.
+`cl bench` still measures only Ollama.
+
+#### Known oMLX issues
+
+- [jundot/omlx#3317](https://github.com/jundot/omlx/issues/3317): in some versions oMLX skips every prompt-cache store on Qwen3.8-27B. `cl doctor` fails the `mlx prompt cache in use` check when the log has skipped stores and no successful ones.
+- [jundot/omlx#3462](https://github.com/jundot/omlx/issues/3462): a short tool-call reply may store nothing.
+- [jundot/omlx#3539](https://github.com/jundot/omlx/issues/3539): the same skip-every-store symptom on these Qwen hybrid models.
 
 ### Measure a size
 
@@ -108,7 +121,7 @@ Defaults to `27b` and 3 runs. Benches the size three times, once each for the ba
 | `CLAUDE_LITE_EFFORT`   | Effort level for `cl ollama` (`low`, `medium` or `xhigh` on Qwen3.8; needs thinking on); `--effort` overrides it                                                              | Optional | The size's `effort`, else unset                                                  |
 | `CLAUDE_LITE_HOME`     | The claude-lite checkout that `config/` paths resolve against                                                                                                                 | Optional | The checkout containing the binary (`dist/..`), or the repo when run from source |
 | `CLAUDE_CONFIG_DIR`    | The Claude config directory whose `settings.json` lists the built-in plugins `cl ollama` turns off                                                                            | Optional | `~/.claude`                                                                      |
-| `CLAUDE_LITE_MLX_PORT` | Port `cl mlx` serves vllm-mlx on and points `claude` at                                                                                                                       | Optional | `8435`                                                                           |
+| `CLAUDE_LITE_MLX_PORT` | Port `cl mlx` serves oMLX on and points `claude` at                                                                                                                           | Optional | `8435`                                                                           |
 | `CLAUDE_LITE_THINKING` | `on` or `off` sets thinking for `cl ollama`; `--think`/`--no-think` override it                                                                                               | Optional | The size's `thinking`                                                            |
 | `OLLAMA_HOST`          | Address of the Ollama server for `cl ollama` and `cl bench`: `host`, `host:port` or a URL; a remote host skips the local memory check and joins the sandbox's allowed domains | Optional | `127.0.0.1:11434`                                                                |
 | `HOME`                 | The user home for install targets, the Ollama logs and the bench history                                                                                                      | Optional | `os.homedir()`                                                                   |

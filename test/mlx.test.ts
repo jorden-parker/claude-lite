@@ -1,26 +1,43 @@
 import { expect, test } from "bun:test";
 import { cpSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
-import { launchMlx, mlxUrl, readMlxLogHealth } from "../src/mlx.ts";
+import {
+  launchMlx,
+  modelSettingsDocument,
+  mlxLogPath,
+  mlxUrl,
+  omlxDataDir,
+  readMlxLogHealth,
+  servedModelId,
+} from "../src/mlx.ts";
 import type { Runner } from "../src/ollama/launch.ts";
+import { loadSizes, resolveSize } from "../src/ollama/sizes.ts";
 
 const home = join(import.meta.dir, "..");
 const settingsPathOf = (argv: string[]) => argv[argv.indexOf("--settings") + 1];
 
 const MODEL_35B = "mlx-community/Qwen3.6-35B-A3B-4bit";
+const SERVED_35B = "mlx-community--Qwen3.6-35B-A3B-4bit";
+const DATA_DIR = omlxDataDir(homedir());
 
-type HarnessOptions = { servedReplies?: (string[] | null)[]; doesServerDie?: boolean };
+type HarnessOptions = {
+  servedReplies?: (string[] | null)[];
+  doesServerDie?: boolean;
+  hasOmlx?: boolean;
+};
 
 function harness({
-  servedReplies = [null, [MODEL_35B]],
+  servedReplies = [null, [SERVED_35B]],
   doesServerDie = false,
+  hasOmlx = true,
 }: HarnessOptions = {}) {
   const events: string[] = [];
   const calls: string[][] = [];
   const envs: any[] = [];
   const written: any[] = [];
   const serverCommands: string[][] = [];
+  const modelSettingsWrites: { path: string; document: any }[] = [];
   let probeCount = 0;
   const servedModels = async () => {
     events.push("probe");
@@ -53,46 +70,108 @@ function harness({
     events.push("unload");
     return [];
   };
+  const writeModelSettings = (path: string, document: unknown) => {
+    events.push("write");
+    modelSettingsWrites.push({ path, document });
+  };
   return {
     events,
     calls,
     envs,
     written,
     serverCommands,
-    dependencies: { run, startServer, unload, servedModels, pollDelayMs: 0 },
+    modelSettingsWrites,
+    dependencies: {
+      run,
+      startServer,
+      unload,
+      servedModels,
+      isOmlxInstalled: () => hasOmlx,
+      writeModelSettings,
+      pollDelayMs: 0,
+    },
   };
 }
 
-test("mlx downloads, unloads ollama, serves, waits, runs claude, then stops the server", async () => {
-  const { events, calls, envs, written, serverCommands, dependencies } = harness();
+test("mlx downloads, unloads ollama, writes oMLX settings, serves, waits, runs claude, then stops the server", async () => {
+  const { events, calls, envs, written, dependencies } = harness();
   expect(await launchMlx(home, ["35b", "-p", "hi"], dependencies)).toBe(0);
-  expect(events).toEqual(["probe", "download", "unload", "serve", "probe", "claude", "stop"]);
+  expect(events).toEqual([
+    "probe",
+    "download",
+    "unload",
+    "write",
+    "serve",
+    "probe",
+    "claude",
+    "stop",
+  ]);
   const claude = calls.at(-1)!;
-  expect(claude[claude.indexOf("--model") + 1]).toBe(MODEL_35B);
+  expect(claude[claude.indexOf("--model") + 1]).toBe(SERVED_35B);
   expect(claude.slice(-2)).toEqual(["-p", "hi"]);
   expect(envs.at(-1).ANTHROPIC_BASE_URL).toBe(mlxUrl());
   expect(envs.at(-1).ANTHROPIC_API_KEY).toBeUndefined();
   expect(written[0].env.ANTHROPIC_BASE_URL).toBe(mlxUrl());
-  const server = serverCommands[0];
-  expect(server).toContain("mlx-community/Qwen3.6-35B-A3B-4bit");
-  expect(server[server.indexOf("--tool-call-parser") + 1]).toBe("qwen3_xml");
-  expect(server[server.indexOf("--port") + 1]).toBe(new URL(mlxUrl()).port);
 });
 
-test("mlx --qwen runs qwen against the vllm-mlx /v1 endpoint instead of claude", async () => {
+test("mlx serves the size's model with oMLX on the mlx port", async () => {
+  const { serverCommands, dependencies } = harness();
+  await launchMlx(home, ["35b"], dependencies);
+  expect(serverCommands[0]).toEqual([
+    "omlx",
+    "serve",
+    "--base-path",
+    DATA_DIR,
+    "--host",
+    "127.0.0.1",
+    "--port",
+    new URL(mlxUrl()).port,
+    "--paged-ssd-cache-max-size",
+    "20GB",
+  ]);
+});
+
+test("mlx writes the model settings into the oMLX data dir before the server starts", async () => {
+  const { modelSettingsWrites, serverCommands, dependencies } = harness();
+  await launchMlx(home, ["35b", "--think"], dependencies);
+  expect(modelSettingsWrites.length).toBe(1);
+  expect(modelSettingsWrites[0].path).toBe(join(DATA_DIR, "model_settings.json"));
+  expect(modelSettingsWrites[0].document.models[SERVED_35B].enable_thinking).toBe(true);
+  expect(serverCommands.length).toBe(1);
+});
+
+test("mlx --qwen runs qwen against the oMLX /v1 endpoint with the served id", async () => {
   const { calls, envs, dependencies } = harness();
   expect(await launchMlx(home, ["35b", "--qwen", "-p", "hi"], dependencies)).toBe(0);
   expect(calls.some((argv) => argv[0] === "claude")).toBe(false);
-  expect(calls.at(-1)).toEqual(["qwen", "--model", MODEL_35B, "-p", "hi"]);
+  expect(calls.at(-1)).toEqual(["qwen", "--model", SERVED_35B, "-p", "hi"]);
   expect(envs.at(-1).OPENAI_BASE_URL).toBe(`${mlxUrl()}/v1`);
-  expect(envs.at(-1).OPENAI_MODEL).toBe(MODEL_35B);
+  expect(envs.at(-1).OPENAI_MODEL).toBe(SERVED_35B);
+});
+
+test("mlx hands hf download the repo id, not the served id", async () => {
+  const { calls, dependencies } = harness();
+  await launchMlx(home, ["35b"], dependencies);
+  expect(calls[0]).toEqual([
+    "uvx",
+    "--python",
+    "3.12",
+    "--from",
+    "huggingface_hub",
+    "hf",
+    "download",
+    MODEL_35B,
+  ]);
 });
 
 test("mlx reuses a server already serving the size's model and leaves it running", async () => {
-  const { events, calls, dependencies } = harness({ servedReplies: [[MODEL_35B]] });
+  const { events, calls, modelSettingsWrites, dependencies } = harness({
+    servedReplies: [[SERVED_35B]],
+  });
   expect(await launchMlx(home, ["35b"], dependencies)).toBe(0);
   expect(events).toEqual(["probe", "unload", "claude"]);
   expect(calls.at(-1)![0]).toBe("claude");
+  expect(modelSettingsWrites).toEqual([]);
 });
 
 test("mlx names what holds the port when it serves something else", async () => {
@@ -108,6 +187,7 @@ test("mlx names what holds the port when it serves something else", async () => 
   expect(events).toEqual(["probe", "lsof"]);
   expect(calls[0]).toContain(`-iTCP:${new URL(mlxUrl()).port}`);
   expect(errors[0]).toContain("other-model");
+  expect(errors[0]).toContain(SERVED_35B);
 });
 
 test("mlx skips claude when the server exits before it is ready", async () => {
@@ -117,50 +197,39 @@ test("mlx skips claude when the server exits before it is ready", async () => {
   expect(events.at(-1)).toBe("stop");
 });
 
-test("mlx passes thinking off and the size's sampling as server defaults", async () => {
-  const { serverCommands, dependencies } = harness();
-  await launchMlx(home, ["35b"], dependencies);
-  const server = serverCommands[0];
-  const valueOf = (flag: string) => server[server.indexOf(flag) + 1];
-  expect(valueOf("--default-chat-template-kwargs")).toBe(
-    '{"enable_thinking":false,"preserve_thinking":true}',
-  );
-  expect(valueOf("--default-temperature")).toBe("0.7");
-  expect(valueOf("--default-top-k")).toBe("20");
-  expect(valueOf("--default-top-p")).toBe("0.8");
-  expect(valueOf("--default-min-p")).toBe("0");
+test("mlx returns 1 and stops the server when oMLX does not list the served id", async () => {
+  const { events, dependencies } = harness({ servedReplies: [null, ["mlx-community--Other"]] });
+  const errors: string[] = [];
+  const original = console.error;
+  console.error = (line: string) => errors.push(line);
+  try {
+    expect(await launchMlx(home, ["35b"], dependencies)).toBe(1);
+  } finally {
+    console.error = original;
+  }
+  expect(events).not.toContain("claude");
+  expect(events.at(-1)).toBe("stop");
+  expect(errors[0]).toContain(`oMLX does not list ${SERVED_35B}`);
+  expect(errors[0]).toContain(mlxLogPath(homedir()));
 });
 
-test("mlx --think leaves thinking to the model", async () => {
-  const { serverCommands, dependencies } = harness();
-  await launchMlx(home, ["35b", "--think"], dependencies);
-  const server = serverCommands[0];
-  expect(server[server.indexOf("--default-chat-template-kwargs") + 1]).toBe(
-    '{"preserve_thinking":true}',
-  );
-});
-
-test("mlx caps the prefix trie cache by entries and memory", async () => {
-  const { serverCommands, dependencies } = harness();
-  await launchMlx(home, ["35b"], dependencies);
-  const server = serverCommands[0];
-  const valueOf = (flag: string) => server[server.indexOf(flag) + 1];
-  expect(valueOf("--prefix-trie-cache-size")).toBe("4");
-  expect(valueOf("--prefix-trie-cache-memory-mb")).toBe("8192");
-});
-
-test("mlx prefills in 4096-token steps", async () => {
-  const { serverCommands, dependencies } = harness();
-  await launchMlx(home, ["35b"], dependencies);
-  const server = serverCommands[0];
-  expect(server[server.indexOf("--prefill-step-size") + 1]).toBe("4096");
-});
-
-test("mlx leaves out the flags that turn off vllm-mlx prompt caching", async () => {
-  const { serverCommands, dependencies } = harness();
-  await launchMlx(home, ["35b"], dependencies);
-  for (const flag of ["--enable-mtp", "--specprefill", "--max-kv-size", "--continuous-batching"])
-    expect(serverCommands[0]).not.toContain(flag);
+test("mlx returns 1 without downloading or starting anything when omlx is not installed", async () => {
+  const { events, calls, serverCommands, modelSettingsWrites, dependencies } = harness({
+    hasOmlx: false,
+  });
+  const errors: string[] = [];
+  const original = console.error;
+  console.error = (line: string) => errors.push(line);
+  try {
+    expect(await launchMlx(home, ["35b"], dependencies)).toBe(1);
+  } finally {
+    console.error = original;
+  }
+  expect(events).toEqual([]);
+  expect(calls).toEqual([]);
+  expect(serverCommands).toEqual([]);
+  expect(modelSettingsWrites).toEqual([]);
+  expect(errors[0]).toContain("brew install jundot/omlx/omlx");
 });
 
 test("mlx skips the ollama unload when OLLAMA_HOST is another machine", async () => {
@@ -197,8 +266,8 @@ test("mlx fails with a message for a size without an mlx model", async () => {
   expect(errors[0]).toContain("9b has no mlx model");
 });
 
-test("mlx --print-config prints the server command and settings without running", async () => {
-  const { calls, events, dependencies } = harness();
+test("mlx --print-config prints the server command, settings path and settings without running", async () => {
+  const { calls, events, modelSettingsWrites, dependencies } = harness();
   const lines: string[] = [];
   const original = console.log;
   console.log = (line: string) => lines.push(line);
@@ -209,11 +278,51 @@ test("mlx --print-config prints the server command and settings without running"
   }
   expect(calls).toEqual([]);
   expect(events).toEqual([]);
-  expect(lines[0]).toContain("vllm-mlx");
-  expect(JSON.parse(lines[1]).env.ANTHROPIC_BASE_URL).toBe(mlxUrl());
+  expect(modelSettingsWrites).toEqual([]);
+  expect(lines[0]).toContain("omlx serve");
+  expect(lines[1]).toContain(join(DATA_DIR, "model_settings.json"));
+  expect(JSON.parse(lines[2]).models[SERVED_35B].max_context_window).toBe(65536);
+  expect(JSON.parse(lines[3]).env.ANTHROPIC_BASE_URL).toBe(mlxUrl());
 });
 
-test("mlx defaults to port 8435, clear of Ollama's runner on 11435", () => {
+test("servedModelId turns the Hugging Face repo id into the id oMLX serves", () => {
+  expect(servedModelId("mlx-community/Qwen3.8-27B-4bit")).toBe("mlx-community--Qwen3.8-27B-4bit");
+});
+
+test("modelSettingsDocument has an entry for every mlx size under its served id", () => {
+  const sizes = loadSizes(home);
+  const { size } = resolveSize(home, ["35b"], {});
+  const document = modelSettingsDocument(sizes, size);
+  const expected = Object.values(sizes)
+    .filter((candidate) => candidate.mlx)
+    .map((candidate) => servedModelId(candidate.mlx!));
+  expect(Object.keys(document.models).sort()).toEqual(expected.sort());
+  expect(document.version).toBe(1);
+});
+
+test("modelSettingsDocument lets the resolved size override its table entry", () => {
+  const sizes = loadSizes(home);
+  const { size } = resolveSize(home, ["35b", "--think"], {});
+  const document = modelSettingsDocument(sizes, size);
+  expect(sizes["35b"].thinking).toBe(false);
+  expect(document.models[SERVED_35B].enable_thinking).toBe(true);
+});
+
+test("modelSettingsDocument emits only the sampling keys a size sets, with force_sampling on", () => {
+  const { size: table } = resolveSize(home, ["35b"], {});
+  const size = { ...table, parameters: { temperature: 0.4, num_ctx: 32768 } };
+  const document = modelSettingsDocument({ "35b": size }, size);
+  expect(document.models[SERVED_35B]).toEqual({
+    max_context_window: size.context,
+    max_tokens: size.output_tokens,
+    temperature: 0.4,
+    force_sampling: true,
+    enable_thinking: size.thinking,
+    preserve_thinking: true,
+  });
+});
+
+test("mlxUrl defaults to port 8435, clear of Ollama's runner on 11435", () => {
   expect(mlxUrl({})).toBe("http://127.0.0.1:8435");
 });
 
@@ -236,25 +345,30 @@ test("mlxUrl rejects a port that is not a number", () => {
   expect(() => mlxUrl({ CLAUDE_LITE_MLX_PORT: "abc" })).toThrow("CLAUDE_LITE_MLX_PORT");
 });
 
-const CACHE_SKIP = (controls: string) =>
-  `INFO System KV cache SKIP (stream_chat): request or engine has controls/features the cache branch cannot honor (${controls}); using uncached path`;
-const WIRED_WARNING =
-  "[WARNING] Generating with a model that requires 21000 MB which is close to the maximum recommended size of 17000 MB. This can be slow.";
+const CACHE_STORED = (id: string) =>
+  `INFO Using boundary cache snapshot for ${id}: storing 4096/5000 tokens (boundary)`;
+const CACHE_SKIPPED = (id: string, reason: string) =>
+  `INFO Skipping cache store for ${id}: reason=${reason} tokens=5000`;
 
-test("readMlxLogHealth lists the cache-skip controls in first-seen order without repeats", () => {
-  const log = [CACHE_SKIP("['top_k']"), CACHE_SKIP("['top_k', 'stop']")].join("\n");
-  expect(readMlxLogHealth(log).cacheSkipControls).toEqual(["top_k", "stop"]);
+test("readMlxLogHealth counts the successful cache stores", () => {
+  const log = [CACHE_STORED(SERVED_35B), CACHE_STORED(SERVED_35B)].join("\n");
+  expect(readMlxLogHealth(log)).toEqual({ cacheStores: 2, cacheSkipReasons: [] });
 });
 
-test("readMlxLogHealth reads the model MB from the wired-memory warning", () => {
-  expect(readMlxLogHealth(WIRED_WARNING).modelMemoryMb).toBe(21000);
+test("readMlxLogHealth lists the skip reasons in first-seen order without repeats", () => {
+  const log = [
+    CACHE_SKIPPED(SERVED_35B, "mismatch"),
+    CACHE_SKIPPED(SERVED_35B, "too_short"),
+    CACHE_SKIPPED(SERVED_35B, "mismatch"),
+  ].join("\n");
+  expect(readMlxLogHealth(log)).toEqual({
+    cacheStores: 0,
+    cacheSkipReasons: ["mismatch", "too_short"],
+  });
 });
 
 test("readMlxLogHealth finds nothing in a clean log or an empty string", () => {
   const clean = "INFO server started\nINFO request completed";
-  for (const log of [clean, ""]) {
-    const health = readMlxLogHealth(log);
-    expect(health.cacheSkipControls).toEqual([]);
-    expect(health.modelMemoryMb).toBeUndefined();
-  }
+  for (const log of [clean, ""])
+    expect(readMlxLogHealth(log)).toEqual({ cacheStores: 0, cacheSkipReasons: [] });
 });

@@ -236,38 +236,41 @@ const writeMlxLog = (user: string, text: string) => {
   writeFileSync(mlxLogPath(user), text);
 };
 
-test("doctor reports an mlx prompt cache skip with its controls and fails", async () => {
+const CACHE_SKIPPED = (reason: string) =>
+  `INFO Skipping cache store for mlx-community--Qwen3.8-27B-4bit: reason=${reason} tokens=5000`;
+const CACHE_STORED =
+  "INFO Using boundary cache snapshot for mlx-community--Qwen3.8-27B-4bit: storing 4096/5000 tokens (boundary)";
+
+test("doctor fails with the skip reasons when oMLX stored no prompt cache", async () => {
   const { user, home, system } = await installedHome();
-  writeMlxLog(
-    user,
-    "INFO System KV cache SKIP (stream_chat): request or engine has controls/features the cache branch cannot honor (['top_k', 'stop']); using uncached path",
-  );
+  writeMlxLog(user, [CACHE_SKIPPED("mismatch"), CACHE_SKIPPED("too_short")].join("\n"));
   const { code, printed } = await doctorPrinting(user, home, system);
   expect(code).toBe(1);
   expect(printed).toContain("FAIL mlx prompt cache in use");
-  expect(printed.some((line) => line.includes("mlx prompt cache skipped by: top_k, stop"))).toBe(
-    true,
-  );
+  expect(
+    printed.some((line) =>
+      line.includes(
+        "oMLX stored no prompt cache; skipped by: mismatch, too_short (see " +
+          mlxLogPath(user) +
+          "; known issue jundot/omlx#3317)",
+      ),
+    ),
+  ).toBe(true);
 });
 
-test("doctor passes the mlx checks when no mlx log exists", async () => {
+test("doctor passes the mlx prompt cache check when oMLX stored at least one entry", async () => {
+  const { user, home, system } = await installedHome();
+  writeMlxLog(user, [CACHE_SKIPPED("mismatch"), CACHE_STORED].join("\n"));
+  const { code, printed } = await doctorPrinting(user, home, system);
+  expect(code).toBe(0);
+  expect(printed).toContain("ok   mlx prompt cache in use");
+});
+
+test("doctor passes the mlx prompt cache check when no mlx log exists", async () => {
   const { user, home, system } = await installedHome();
   const { code, printed } = await doctorPrinting(user, home, system);
   expect(code).toBe(0);
   expect(printed).toContain("ok   mlx prompt cache in use");
-  expect(printed).toContain("ok   mlx model memory wired");
-});
-
-test("doctor reports unwired mlx model memory with the sysctl hint and fails", async () => {
-  const { user, home, system } = await installedHome();
-  writeMlxLog(
-    user,
-    "[WARNING] Generating with a model that requires 21000 MB which is close to the maximum recommended size of 17000 MB.",
-  );
-  const { code, printed } = await doctorPrinting(user, home, system);
-  expect(code).toBe(1);
-  expect(printed).toContain("FAIL mlx model memory wired");
-  expect(printed.some((line) => line.includes("sudo sysctl iogpu.wired_limit_mb="))).toBe(true);
 });
 
 function ollamaRoots() {
@@ -549,7 +552,7 @@ test("uninstall removes completion files but leaves foreign ones", async () => {
   expect(readFileSync(completionFiles(user).fish, "utf8")).toBe("mine\n");
 });
 
-test("stop kills the vllm-mlx server and every Ollama process", async () => {
+test("stop kills the oMLX server and every Ollama process", async () => {
   const commands: string[][] = [];
   const run: Runner = async (argv) => {
     commands.push(argv);
@@ -557,7 +560,7 @@ test("stop kills the vllm-mlx server and every Ollama process", async () => {
   };
   expect(await stop("/user", "/lite", run)).toBe(0);
   expect(commands).toEqual([
-    ["pkill", "-f", "vllm-mlx.* serve"],
+    ["pkill", "-f", "omlx-server|omlx.* serve"],
     ["pkill", "-ix", "ollama"],
   ]);
 });

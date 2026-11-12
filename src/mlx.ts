@@ -1,9 +1,9 @@
-import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { isRemoteHost, unloadModels } from "./ollama/api.ts";
 import { renderLaunchSettings, type Runner, runClaude, spawnRunner } from "./ollama/launch.ts";
-import { resolveSize, type Size } from "./ollama/sizes.ts";
+import { loadSizes, resolveSize, type Size } from "./ollama/sizes.ts";
 import { runQwen } from "./qwen.ts";
 
 const DEFAULT_MLX_PORT = "8435";
@@ -16,16 +16,15 @@ export function mlxUrl(env: Record<string, string | undefined> = process.env): s
 }
 
 const mlxPort = () => new URL(mlxUrl()).port;
-export const MLX_SERVER_PATTERN = "vllm-mlx.* serve";
+export const MLX_SERVER_PATTERN = "omlx-server|omlx.* serve";
 const STOP_HINT = "cl stop";
-const VLLM_MLX = "vllm-mlx@0.6.0";
 const PYTHON = "3.12";
-const QWEN_TOOL_PARSER = "qwen3_xml";
-const QWEN_REASONING_PARSER = "qwen3";
-const PREFIX_TRIE_CACHE_ENTRIES = "4";
-const PREFIX_TRIE_CACHE_MEMORY_MB = "8192";
-const PREFILL_STEP_TOKENS = "4096";
+const OMLX_INSTALL_HINT =
+  "brew tap jundot/omlx https://github.com/jundot/omlx && brew install jundot/omlx/omlx --with-custom-kernel (needs full Xcode; without it: brew install jundot/omlx/omlx)";
+const SERVER_SSD_CACHE = "20GB";
 const SAMPLING = ["temperature", "top_p", "top_k", "min_p", "presence_penalty"];
+const CACHE_STORED = "Using boundary cache snapshot for";
+const CACHE_SKIP_REASON = /Skipping cache store.*reason=(\w+)/;
 
 type MlxServer = { exited: Promise<number>; stop: () => void };
 
@@ -34,6 +33,8 @@ type MlxDependencies = {
   startServer: (argv: string[], logPath: string) => MlxServer;
   unload: () => Promise<string[]>;
   servedModels: () => Promise<string[] | null>;
+  isOmlxInstalled: () => boolean;
+  writeModelSettings: (path: string, document: unknown) => void;
   pollDelayMs: number;
 };
 
@@ -62,71 +63,78 @@ async function fetchServedModels(): Promise<string[] | null> {
   }
 }
 
+function writeModelSettingsFile(path: string, document: unknown) {
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, JSON.stringify(document, null, 2));
+}
+
 const DEFAULTS: MlxDependencies = {
   run: spawnRunner,
   startServer: spawnServer,
   unload: unloadModels,
   servedModels: fetchServedModels,
+  isOmlxInstalled: () => Bun.which("omlx") !== null,
+  writeModelSettings: writeModelSettingsFile,
   pollDelayMs: 1000,
 };
 
 export const mlxLogPath = (userHome: string) =>
   join(userHome, ".cache", "claude-lite", "mlx-server.log");
 
-export type MlxLogHealth = { cacheSkipControls: string[]; modelMemoryMb?: number };
+export const omlxDataDir = (userHome: string) => join(userHome, ".cache", "claude-lite", "omlx");
+
+export const servedModelId = (repo: string) => repo.replaceAll("/", "--");
+
+export type MlxLogHealth = { cacheStores: number; cacheSkipReasons: string[] };
 
 export function readMlxLogHealth(logText: string): MlxLogHealth {
-  const controls = new Set<string>();
-  for (const [, list] of logText.matchAll(/KV cache SKIP.*?\[([^\]]*)\]/g))
-    for (const control of list.split(",")) {
-      const name = control.trim().replace(/^['"]|['"]$/g, "");
-      if (name) controls.add(name);
-    }
-  const memory = logText.match(/model that requires (\d+) MB/);
-  return {
-    cacheSkipControls: [...controls],
-    modelMemoryMb: memory ? Number(memory[1]) : undefined,
-  };
+  const reasons = new Set<string>();
+  let cacheStores = 0;
+  for (const line of logText.split("\n")) {
+    if (line.includes(CACHE_STORED)) cacheStores += 1;
+    const reason = line.match(CACHE_SKIP_REASON)?.[1];
+    if (reason) reasons.add(reason);
+  }
+  return { cacheStores, cacheSkipReasons: [...reasons] };
 }
 const logPath = () => mlxLogPath(homedir());
 
-function samplingFlags(parameters: Record<string, number> = {}): string[] {
-  return Object.entries(parameters)
-    .filter(([name]) => SAMPLING.includes(name))
-    .flatMap(([name, amount]) => [`--default-${name.replaceAll("_", "-")}`, String(amount)]);
+type ModelSettings = Record<string, number | boolean>;
+
+function modelSettings(size: Size): ModelSettings {
+  const parameters = size.parameters ?? {};
+  const sampling = Object.fromEntries(
+    Object.entries(parameters).filter(([name]) => SAMPLING.includes(name)),
+  );
+  return {
+    max_context_window: size.context,
+    max_tokens: size.output_tokens,
+    ...sampling,
+    force_sampling: true,
+    enable_thinking: size.thinking,
+    preserve_thinking: true,
+  };
 }
 
-function serverCommand(size: Size, model: string): string[] {
+export function modelSettingsDocument(sizes: Record<string, Size>, launched: Size) {
+  const models: Record<string, ModelSettings> = {};
+  for (const size of [...Object.values(sizes), launched])
+    if (size.mlx) models[servedModelId(size.mlx)] = modelSettings(size);
+  return { version: 1, models };
+}
+
+function serverCommand(dataDir: string): string[] {
   return [
-    "uvx",
-    "--python",
-    PYTHON,
-    VLLM_MLX,
+    "omlx",
     "serve",
-    model,
+    "--base-path",
+    dataDir,
     "--host",
     "127.0.0.1",
     "--port",
     mlxPort(),
-    "--enable-auto-tool-choice",
-    "--tool-call-parser",
-    QWEN_TOOL_PARSER,
-    "--reasoning-parser",
-    QWEN_REASONING_PARSER,
-    "--prefix-trie-cache",
-    "--prefix-trie-cache-size",
-    PREFIX_TRIE_CACHE_ENTRIES,
-    "--prefix-trie-cache-memory-mb",
-    PREFIX_TRIE_CACHE_MEMORY_MB,
-    "--prefill-step-size",
-    PREFILL_STEP_TOKENS,
-    "--default-chat-template-kwargs",
-    JSON.stringify(
-      size.thinking
-        ? { preserve_thinking: true }
-        : { enable_thinking: false, preserve_thinking: true },
-    ),
-    ...samplingFlags(size.parameters),
+    "--paged-ssd-cache-max-size",
+    SERVER_SSD_CACHE,
   ];
 }
 
@@ -134,15 +142,16 @@ async function waitUntilReady(
   server: MlxServer,
   servedModels: MlxDependencies["servedModels"],
   pollDelayMs: number,
-) {
+): Promise<string[] | null> {
   let hasExited = false;
   void server.exited.then(() => {
     hasExited = true;
   });
   for (;;) {
     await Bun.sleep(pollDelayMs);
-    if (hasExited) return false;
-    if ((await servedModels()) !== null) return true;
+    if (hasExited) return null;
+    const listing = await servedModels();
+    if (listing !== null) return listing;
   }
 }
 
@@ -151,35 +160,53 @@ export async function launchMlx(
   args: string[],
   overrides: Partial<MlxDependencies> = {},
 ): Promise<number> {
-  const { run, startServer, unload, servedModels, pollDelayMs } = { ...DEFAULTS, ...overrides };
+  const {
+    run,
+    startServer,
+    unload,
+    servedModels,
+    isOmlxInstalled,
+    writeModelSettings,
+    pollDelayMs,
+  } = { ...DEFAULTS, ...overrides };
   const isPrintOnly = args.includes("--print-config");
   const { name, size, claudeArgs } = resolveSize(
     home,
     args.filter((arg) => arg !== "--print-config"),
   );
-  const model = size.mlx;
-  if (!model) {
+  const repo = size.mlx;
+  if (!repo) {
     console.error(`size ${name} has no mlx model; add "mlx" to it in config/sizes.json`);
     return 1;
   }
+  const model = servedModelId(repo);
+  const dataDir = omlxDataDir(homedir());
+  const settingsPath = join(dataDir, "model_settings.json");
+  const document = modelSettingsDocument(loadSizes(home), size);
   const settings = renderLaunchSettings(home, { ...size, model }, mlxUrl());
-  const command = serverCommand(size, model);
+  const command = serverCommand(dataDir);
   if (isPrintOnly) {
     console.log(command.join(" "));
+    console.log(`model settings: ${settingsPath}`);
+    console.log(JSON.stringify(document, null, 2));
     console.log(JSON.stringify(settings, null, 2));
     return 0;
+  }
+  if (!isOmlxInstalled()) {
+    console.error(`oMLX is not installed; install it with ${OMLX_INSTALL_HINT}`);
+    return 1;
   }
   const alreadyServed = await servedModels();
   if (alreadyServed?.includes(model)) {
     console.log(
-      `reusing the vllm-mlx already serving ${model} on ${mlxUrl()}; it keeps running after claude exits (stop it: ${STOP_HINT})`,
+      `reusing the oMLX already serving ${model} on ${mlxUrl()}; it keeps running after claude exits (stop it: ${STOP_HINT})`,
     );
     await unloadOllama(unload);
     return await runClaudeIn(home, size, model, settings, claudeArgs, run);
   }
   if (alreadyServed !== null) {
     console.error(
-      `${mlxUrl()} already serves ${alreadyServed.join(", ") || "something that is not vllm-mlx"}, not ${model}; free port ${mlxPort()} (stop a leftover vllm-mlx: ${STOP_HINT})`,
+      `${mlxUrl()} already serves ${alreadyServed.join(", ") || "something that is not oMLX"}, not ${model}; free port ${mlxPort()} (stop a leftover oMLX: ${STOP_HINT})`,
     );
     await run(["lsof", "-nP", `-iTCP:${mlxPort()}`, "-sTCP:LISTEN"]);
     return 1;
@@ -193,16 +220,24 @@ export async function launchMlx(
       "huggingface_hub",
       "hf",
       "download",
-      model,
+      repo,
     ])) !== 0
   )
     return 1;
   await unloadOllama(unload);
-  console.log(`starting vllm-mlx for ${model}; log: ${logPath()}`);
+  writeModelSettings(settingsPath, document);
+  console.log(`starting oMLX for ${model}; log: ${logPath()}`);
   const server = startServer(command, logPath());
   try {
-    if (!(await waitUntilReady(server, servedModels, pollDelayMs))) {
-      console.error(`vllm-mlx exited before it was ready; see ${logPath()}`);
+    const listing = await waitUntilReady(server, servedModels, pollDelayMs);
+    if (listing === null) {
+      console.error(`oMLX exited before it was ready; see ${logPath()}`);
+      return 1;
+    }
+    if (!listing.includes(model)) {
+      console.error(
+        `oMLX does not list ${model}; the model is not in the Hugging Face cache as an MLX model; see ${logPath()}`,
+      );
       return 1;
     }
     return await runClaudeIn(home, size, model, settings, claudeArgs, run);

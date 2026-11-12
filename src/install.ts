@@ -235,6 +235,7 @@ export async function doctor(
   const mlxHealth = readMlxLogHealth(
     existsSync(mlxLogFile) ? readFileSync(mlxLogFile, "utf8") : "",
   );
+  const isMlxCacheUnused = mlxHealth.cacheStores === 0 && mlxHealth.cacheSkipReasons.length > 0;
   const checks: [string, boolean][] = [
     ["binary built", binaryBuilt],
     ["binary runs", binaryBuilt && (await run([binaryPath(home), "--help"])) === 0],
@@ -245,17 +246,12 @@ export async function doctor(
     [`ollama ${MINIMUM_OLLAMA} or newer`, isSupportedVersion(server.version)],
     ["one ollama startup source", ollamaStartupSources(userHome, systemRoot).length <= 1],
     ["ollama server env set", (await run(["sh", "-c", serverEnvCheck()])) === 0],
-    ["mlx prompt cache in use", mlxHealth.cacheSkipControls.length === 0],
-    ["mlx model memory wired", mlxHealth.modelMemoryMb === undefined],
+    ["mlx prompt cache in use", !isMlxCacheUnused],
   ];
   for (const [label, ok] of checks) console.log(`${ok ? "ok  " : "FAIL"} ${label}`);
-  if (mlxHealth.cacheSkipControls.length)
+  if (isMlxCacheUnused)
     console.log(
-      `mlx prompt cache skipped by: ${mlxHealth.cacheSkipControls.join(", ")} (see ${mlxLogFile})`,
-    );
-  if (mlxHealth.modelMemoryMb !== undefined)
-    console.log(
-      `raise the wired limit above ${mlxHealth.modelMemoryMb} MB: sudo sysctl iogpu.wired_limit_mb=${mlxHealth.modelMemoryMb + 1024}`,
+      `oMLX stored no prompt cache; skipped by: ${mlxHealth.cacheSkipReasons.join(", ")} (see ${mlxLogFile}; known issue jundot/omlx#3317)`,
     );
   for (const line of securityPosture(home)) console.log(line);
   return checks.every(([, ok]) => ok) ? 0 : 1;
@@ -400,7 +396,7 @@ export async function stop(
   run: Runner = spawnRunner,
 ): Promise<number> {
   const targets: [string, string[]][] = [
-    ["vllm-mlx", ["pkill", "-f", MLX_SERVER_PATTERN]],
+    ["oMLX", ["pkill", "-f", MLX_SERVER_PATTERN]],
     ["Ollama", ["pkill", "-ix", "ollama"]],
   ];
   for (const [label, command] of targets)
