@@ -95,6 +95,12 @@ test("launch loads no MCP servers", async () => {
   expect(calls.at(-1)).toContain("--strict-mcp-config");
 });
 
+test("launch writes the ollama settings with no hooks", async () => {
+  const { written, run } = recorder(false);
+  await launch(home, [], run, okApi);
+  expect(written[0].hooks).toBeUndefined();
+});
+
 test("launch disables the plugins the user enabled", async () => {
   const configDir = mkdtempSync(join(tmpdir(), "claude-config-"));
   writeFileSync(
@@ -120,11 +126,9 @@ test("launch stops when the ollama server does not respond", async () => {
 });
 
 test("settings deny only the project's own dist, not node_modules docs", async () => {
-  for (const name of ["claude.json", "ollama.json"]) {
-    const { deny } = (await Bun.file(join(home, "config", name)).json()).permissions;
-    expect(deny).not.toContain("Read(**/dist/**)");
-    expect(deny).toContain("Read(./dist/**)");
-  }
+  const { deny } = (await Bun.file(join(home, "config", "ollama.json")).json()).permissions;
+  expect(deny).not.toContain("Read(**/dist/**)");
+  expect(deny).toContain("Read(./dist/**)");
 });
 
 test("launch plan helpers stay internal to the launcher", async () => {
@@ -171,14 +175,14 @@ const sizeWith = (overrides: Partial<Size>): Size => ({
 const disabledBody = JSON.stringify({ thinking: { type: "disabled" } });
 
 test("thinking off sends the disabled body and no effort", () => {
-  const settings = renderSettings({ env: {} }, {}, sizeWith({ thinking: false }));
+  const settings = renderSettings({ env: {} }, sizeWith({ thinking: false }));
   expect(settings.env.CLAUDE_CODE_EXTRA_BODY).toBe(disabledBody);
   expect(settings.effortLevel).toBeUndefined();
 });
 
 test("thinking on with an effort sends it as output_config", () => {
   const base = { env: { CLAUDE_CODE_EXTRA_BODY: disabledBody } };
-  const settings = renderSettings(base, {}, sizeWith({ thinking: true, effort: "low" }));
+  const settings = renderSettings(base, sizeWith({ thinking: true, effort: "low" }));
   expect(settings.env.CLAUDE_CODE_EXTRA_BODY).toBe(
     JSON.stringify({ output_config: { effort: "low" } }),
   );
@@ -187,7 +191,7 @@ test("thinking on with an effort sends it as output_config", () => {
 
 test("thinking on without an effort drops the base body", () => {
   const base = { env: { CLAUDE_CODE_EXTRA_BODY: disabledBody } };
-  const settings = renderSettings(base, {}, sizeWith({ thinking: true }));
+  const settings = renderSettings(base, sizeWith({ thinking: true }));
   expect(settings.env.CLAUDE_CODE_EXTRA_BODY).toBeUndefined();
 });
 
@@ -226,7 +230,7 @@ test("--no-think turns thinking off and is not passed to claude", async () => {
 
 test("renderSettings keeps the base sandbox and permissions unchanged", () => {
   const base = { sandbox: { enabled: true }, permissions: { deny: ["x"] } };
-  const settings = renderSettings(base, {}, sizeWith({}));
+  const settings = renderSettings(base, sizeWith({}));
   expect(settings.sandbox).toEqual(base.sandbox);
   expect(settings.permissions).toEqual(base.permissions);
 });

@@ -63,13 +63,16 @@ function withServerUrl<Settings extends Record<string, any>>(settings: Settings,
   };
 }
 
+export function ollamaBaseSettings(home: string): Record<string, any> {
+  const base = JSON.parse(readFileSync(join(home, "config", "ollama.json"), "utf8"));
+  const overlaid = withJsonOverlay(base, join(home, "config", "local-ollama.json"));
+  return withSharedSecrets(overlaid, home);
+}
+
 function buildPlan(home: string, args: string[]) {
   const { name, size, claudeArgs } = resolveSize(home, args);
-  const read = (name: string) => JSON.parse(readFileSync(join(home, "config", name), "utf8"));
-  const overlaid = withJsonOverlay(read("ollama.json"), join(home, "config", "local-ollama.json"));
-  const base = withSharedSecrets(overlaid, home);
   const rendered = {
-    ...renderSettings(base, read("hooks.json"), size),
+    ...renderSettings(ollamaBaseSettings(home), size),
     enabledPlugins: disabledUserPlugins(),
   };
   const settings = process.env.OLLAMA_HOST ? withServerUrl(rendered, ollamaUrl()) : rendered;
@@ -166,7 +169,6 @@ async function launchFrom(
   writeFileSync(settingsPath, JSON.stringify(settings, null, 2), { mode: 0o600 });
   const env: Record<string, string | undefined> = {
     ...process.env,
-    CLAUDE_LITE_HOME: home,
     ANTHROPIC_BASE_URL: ollamaUrl(),
   };
   delete env.ANTHROPIC_API_KEY;

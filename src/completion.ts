@@ -1,11 +1,10 @@
 import { join } from "node:path";
 import { COMMAND_HELP } from "./help.ts";
-import { HOOK_NAMES } from "./hooks/run-hook.ts";
 import { FLAGS } from "./ollama/size-overrides.ts";
 import { loadSizes } from "./ollama/sizes.ts";
 
 export type Shell = "zsh" | "bash" | "fish";
-export type CompletionWords = { commands: string[]; hooks: string[]; sizes: string[] };
+export type CompletionWords = { commands: string[]; sizes: string[] };
 
 export const START = "# >>> claude-lite >>>";
 export const END = "# <<< claude-lite <<<";
@@ -30,7 +29,7 @@ export function completionWords(home: string): CompletionWords {
   try {
     sizes = Object.keys(loadSizes(home));
   } catch {}
-  return { commands: Object.keys(COMMAND_HELP), hooks: HOOK_NAMES, sizes };
+  return { commands: Object.keys(COMMAND_HELP), sizes };
 }
 
 export const EFFORT_LEVELS = ["low", "medium", "xhigh"];
@@ -64,14 +63,14 @@ const benchNext = (typed: string[], sizes: string[]) =>
       !word.startsWith("--") || word === "--json" || word === "--help" || BENCH_FLAGS.has(word),
   );
 
-export function nextWords(typed: string[], { commands, hooks, sizes }: CompletionWords): string[] {
+export function nextWords(typed: string[], { commands, sizes }: CompletionWords): string[] {
   const [command, ...rest] = typed;
   if (command === undefined) return [...commands, "help"];
   if (command === "help") return rest.length === 0 ? commands : [];
   if (command === "ollama") return ollamaNext(rest, sizes);
   if (command === "bench") return benchNext(rest, sizes);
   if (!commands.includes(command) || rest.length > 0) return [];
-  return command === "hook" ? [...hooks, "--help"] : ["--help"];
+  return ["--help"];
 }
 
 export function completionPath(userHome: string, shell: Shell): string {

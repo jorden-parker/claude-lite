@@ -1,6 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { COMMAND_HELP } from "../src/help.ts";
 import { FLAGS } from "../src/ollama/size-overrides.ts";
@@ -34,10 +32,6 @@ describe("cli help", () => {
       });
     }
   }
-
-  test("hook --help lists hook names", () => {
-    expect(runCli("hook", "--help").stdout.toString()).toContain("bash-guard");
-  });
 
   test("install --help mentions shell completion", () => {
     expect(runCli("install", "--help").stdout.toString()).toContain("completion");
@@ -73,19 +67,6 @@ test("servers help says it sets the server env", () => {
   expect(COMMAND_HELP.servers).toContain("launchctl setenv");
 });
 
-test("stats has help text", () => {
-  expect(Object.keys(COMMAND_HELP)).toContain("stats");
-});
-
-test("stats runs and summarizes an empty hook log", () => {
-  const userHome = mkdtempSync(join(tmpdir(), "cli-stats-"));
-  const result = Bun.spawnSync(["bun", "src/cli.ts", "stats"], {
-    env: { ...process.env, HOME: userHome },
-  });
-  expect(result.exitCode).toBe(0);
-  expect(result.stdout.toString()).toContain("no hook decisions logged");
-});
-
 describe("cli strictness and completion", () => {
   test("__complete ollama lists sizes, then flags after a size", () => {
     const sizes = runCli("__complete", "ollama").stdout.toString();
@@ -106,11 +87,5 @@ describe("cli strictness and completion", () => {
     expect(result.exitCode).toBe(2);
     expect(result.stderr.toString()).toContain("usage: claude-lite doctor");
     expect(result.stdout.toString()).not.toContain("done");
-  });
-
-  test("hook alone prints hook help", () => {
-    const result = runCli("hook");
-    expect(result.exitCode).toBe(2);
-    expect(result.stderr.toString()).toContain("usage: claude-lite hook");
   });
 });

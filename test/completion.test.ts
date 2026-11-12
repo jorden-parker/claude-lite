@@ -5,8 +5,7 @@ import { join } from "node:path";
 import { completionPath, completionScript, nextWords } from "../src/completion.ts";
 
 const words = {
-  commands: ["install", "doctor", "hook", "ollama", "bench"],
-  hooks: ["bash-guard", "tdd-guard"],
+  commands: ["install", "doctor", "ollama", "bench"],
   sizes: ["27b", "35b"],
 };
 const shells = ["zsh", "bash", "fish"] as const;
@@ -27,9 +26,9 @@ describe("nextWords", () => {
     expect(complete("doctor")).toEqual(["--help"]);
     expect(complete("doctor", "--help")).toEqual([]);
   });
-  test("hook offers names then nothing", () => {
-    expect(complete("hook")).toEqual([...words.hooks, "--help"]);
-    expect(complete("hook", "bash-guard")).toEqual([]);
+  test("commands take only --help after them", () => {
+    expect(complete("install")).toEqual(["--help"]);
+    expect(complete("install", "x")).toEqual([]);
   });
   test("ollama offers sizes and help first", () => {
     expect(complete("ollama")).toEqual([...words.sizes, "--help"]);

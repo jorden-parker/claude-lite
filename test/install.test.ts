@@ -15,9 +15,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
-  disable,
   doctor,
-  enable,
   fixServers,
   install,
   logs,
@@ -39,24 +37,55 @@ function fixture() {
 }
 
 const clPath = (user: string) => join(user, ".local", "bin", "cl");
+const readRc = (user: string, ...segments: string[]) =>
+  readFileSync(join(user, ...segments), "utf8");
 
-test("install adds blocks idempotently, uninstall restores", async () => {
+test("install adds the completion block idempotently, uninstall restores", async () => {
   const user = fixture();
   expect(await install(user, "/lite")).toBe(0);
   await install(user, "/lite");
-  const md = readFileSync(join(user, ".claude", "CLAUDE.md"), "utf8");
-  expect(md.match(/>>> claude-lite/g)?.length).toBe(1);
-  expect(md).toContain("@/lite/config/PREFERENCES.md");
-  expect(readFileSync(join(user, ".zshrc"), "utf8")).toContain(
-    '--settings "$("/lite/dist/claude-lite" settings)"',
-  );
-  expect(readFileSync(join(user, ".zshrc"), "utf8")).not.toContain("--setting-sources");
-  expect(readdirSync(join(user, ".claude")).some((f) => f.startsWith("CLAUDE.md.bak-"))).toBe(true);
+  const zshrc = readRc(user, ".zshrc");
+  expect(zshrc.match(/>>> claude-lite/g)?.length).toBe(1);
+  expect(zshrc).toContain("compdef _cl cl");
+  expect(zshrc).not.toContain("claude()");
+  expect(readdirSync(user).some((name) => name.startsWith(".zshrc.bak-"))).toBe(true);
   expect(readlinkSync(clPath(user))).toBe("/lite/dist/claude-lite");
   expect(await uninstall(user, "/lite")).toBe(0);
   expect(existsSync(clPath(user))).toBe(false);
-  expect(readFileSync(join(user, ".claude", "CLAUDE.md"), "utf8")).toBe("mine\n");
-  expect(readFileSync(join(user, ".zshrc"), "utf8")).toBe("export A=1\n");
+  expect(readRc(user, ".claude", "CLAUDE.md")).toBe("mine\n");
+  expect(readRc(user, ".zshrc")).toBe("export A=1\n");
+});
+
+test("install never touches ~/.claude/CLAUDE.md", async () => {
+  const user = fixture();
+  await install(user, "/lite");
+  expect(readRc(user, ".claude", "CLAUDE.md")).toBe("mine\n");
+});
+
+test("install replaces a legacy claude-lite block with the completion block", async () => {
+  const user = fixture();
+  writeFileSync(
+    join(user, ".zshrc"),
+    "export A=1\n# >>> claude-lite >>>\nclaude() { echo old; }\n# <<< claude-lite <<<\n",
+  );
+  await install(user, "/lite");
+  const zshrc = readRc(user, ".zshrc");
+  expect(zshrc).not.toContain("claude() { echo old; }");
+  expect(zshrc.match(/>>> claude-lite/g)?.length).toBe(1);
+  expect(zshrc).toContain("export A=1");
+});
+
+test("uninstall removes legacy claude-lite blocks from CLAUDE.md and every shell rc", async () => {
+  const user = fixture();
+  const legacy = "# >>> claude-lite >>>\nlegacy\n# <<< claude-lite <<<\n";
+  writeFileSync(join(user, ".claude", "CLAUDE.md"), `mine\n\n${legacy}`);
+  writeFileSync(join(user, ".bashrc"), `${legacy}export B=1\n`);
+  mkdirSync(join(user, ".config", "fish"), { recursive: true });
+  writeFileSync(join(user, ".config", "fish", "config.fish"), `set -gx C 1\n\n${legacy}`);
+  await uninstall(user, "/lite");
+  expect(readRc(user, ".claude", "CLAUDE.md")).toBe("mine\n");
+  expect(readRc(user, ".bashrc")).toBe("export B=1\n");
+  expect(readRc(user, ".config", "fish", "config.fish")).toBe("set -gx C 1\n");
 });
 
 test("install upgrades an old install and repoints the link", async () => {
@@ -65,8 +94,7 @@ test("install upgrades an old install and repoints the link", async () => {
   expect(readlinkSync(clPath(user))).toBe("/elsewhere/dist/claude-lite");
   await install(user, "/lite");
   expect(readlinkSync(clPath(user))).toBe("/lite/dist/claude-lite");
-  const md = readFileSync(join(user, ".claude", "CLAUDE.md"), "utf8");
-  expect(md.match(/>>> claude-lite/g)?.length).toBe(1);
+  expect(readRc(user, ".zshrc").match(/>>> claude-lite/g)?.length).toBe(1);
 });
 
 test("install leaves a regular file or unrelated link alone", async () => {
@@ -139,7 +167,7 @@ test("doctor passes after install", async () => {
   expect(await doctor(user, home, async () => 0, system)).toBe(0);
 });
 
-test("doctor fails when blocks are missing", async () => {
+test("doctor fails when shell completion is missing", async () => {
   const { user, home, system } = await installedHome();
   await uninstall(user, home);
   expect(await doctor(user, home, async () => 0, system)).toBe(1);
@@ -150,22 +178,15 @@ test("doctor fails when the binary does not run", async () => {
   expect(await doctor(user, home, async () => 1, system)).toBe(1);
 });
 
-test("doctor fails when a config references an unknown hook", async () => {
+test("doctor fails when config/ollama.json does not parse", async () => {
   const { user, home, system } = await installedHome();
-  writeFileSync(join(home, "config", "hooks.json"), '{"command":"x hook nope"}');
+  writeFileSync(join(home, "config", "ollama.json"), "{nope");
   expect(await doctor(user, home, async () => 0, system)).toBe(1);
 });
 
 test("doctor fails when the ollama server does not respond", async () => {
   const { user, home, system } = await installedHome();
   expect(await doctor(user, home, curlFails, system)).toBe(1);
-});
-
-test("doctor fails when agent-browser does not run", async () => {
-  const { user, home, system } = await installedHome();
-  const versionFails: Runner = async (argv) =>
-    argv.join(" ").includes("agent-browser --version") ? 1 : 0;
-  expect(await doctor(user, home, versionFails, system)).toBe(1);
 });
 
 test("doctor fails with more than one ollama startup source", async () => {
@@ -209,7 +230,7 @@ test("ollamaLogPaths reads plist log paths, adds server.log for Ollama.app, drop
   expect(ollamaLogPaths(user, system)).toEqual([agentLog, join(user, ".ollama/logs/server.log")]);
 });
 
-test("logs tails the hook log and the ollama logs that exist", async () => {
+test("logs tails the ollama logs that exist", async () => {
   const { user, system } = ollamaRoots();
   const agentLog = join(user, "Library/Logs/ollama.log");
   touch(agentLog);
@@ -228,15 +249,15 @@ test("logs tails the hook log and the ollama logs that exist", async () => {
     },
     system,
   );
-  expect(seen).toEqual([
-    "tail",
-    "-F",
-    "-n",
-    "20",
-    join(user, ".cache/claude-lite/hooks.log"),
-    agentLog,
-  ]);
+  expect(seen).toEqual(["tail", "-F", "-n", "20", agentLog]);
   expect(code).toBe(7);
+});
+
+test("logs fails without tailing when no ollama log exists", async () => {
+  const { user, system } = ollamaRoots();
+  const { seen, run } = recordingRunner();
+  expect(await logs(user, "/lite", run, system)).toBe(1);
+  expect(seen).toEqual([]);
 });
 
 test("ollamaStartupSources finds launch agents, daemons and Ollama.app", () => {
@@ -415,15 +436,16 @@ test("install writes completion files and load lines for present shells", async 
     expect(countOf(text, END)).toBe(1);
     expect(text).toContain("cl __complete");
   }
-  const zshrc = readFileSync(join(user, ".zshrc"), "utf8");
+  const zshrc = readRc(user, ".zshrc");
   expect(zshrc).toContain("fpath+=(");
   expect(zshrc).toContain("add-zsh-hook precmd _cl_register");
   expect(zshrc).toContain("autoload -Uz _cl");
   expect(zshrc).toContain("compdef _cl cl");
   expect(countOf(zshrc, START)).toBe(1);
-  const bashrc = readFileSync(join(user, ".bashrc"), "utf8");
+  const bashrc = readRc(user, ".bashrc");
   expect(bashrc).toContain(`. ${files.bash}`);
   expect(countOf(bashrc, START)).toBe(1);
+  expect(readRc(user, ".config", "fish", "config.fish")).toBe("");
 });
 
 test("install skips the fish file without config.fish", async () => {
@@ -442,96 +464,4 @@ test("uninstall removes completion files but leaves foreign ones", async () => {
   expect(existsSync(completionFiles(user).zsh)).toBe(false);
   expect(existsSync(completionFiles(user).bash)).toBe(false);
   expect(readFileSync(completionFiles(user).fish, "utf8")).toBe("mine\n");
-});
-
-const SHELL_RC_SEGMENTS: [string, string[]][] = [
-  ["zsh", [".zshrc"]],
-  ["bash", [".bashrc"]],
-  ["fish", [".config", "fish", "config.fish"]],
-];
-
-for (const [shell, rcSegments] of SHELL_RC_SEGMENTS) {
-  const shellPath = Bun.which(shell);
-  test.skipIf(shellPath === null)(
-    `${shell} claude function passes through unwrapped when CLAUDE_LITE_WRAP=0`,
-    async () => {
-      const user = fixture();
-      mkdirSync(join(user, ".config", "fish"), { recursive: true });
-      writeFileSync(join(user, ".bashrc"), "");
-      writeFileSync(join(user, ".config", "fish", "config.fish"), "");
-      const liteHome = join(user, "lite");
-      mkdirSync(join(liteHome, "dist"), { recursive: true });
-      writeFileSync(join(liteHome, "dist", "claude-lite"), "#!/bin/sh\necho '{}'\n", {
-        mode: 0o755,
-      });
-      await install(user, liteHome);
-      const fakeBinDirectory = join(user, "fake-bin");
-      mkdirSync(fakeBinDirectory);
-      writeFileSync(join(fakeBinDirectory, "claude"), '#!/bin/sh\necho "$@"\n', { mode: 0o755 });
-      const rcPath = join(user, ...rcSegments);
-      const runClaude = (wrapSetting: string | undefined) => {
-        const result = Bun.spawnSync(
-          [shellPath ?? shell, "-c", `source "${rcPath}"; claude one two`],
-          {
-            env: {
-              HOME: user,
-              PATH: `${fakeBinDirectory}:/usr/bin:/bin`,
-              ...(wrapSetting === undefined ? {} : { CLAUDE_LITE_WRAP: wrapSetting }),
-            },
-          },
-        );
-        return result.stdout.toString().trim();
-      };
-      expect(runClaude("0")).toBe("one two");
-      expect(runClaude(undefined)).toBe("--settings {} one two");
-      expect(runClaude("1")).toBe("--settings {} one two");
-    },
-  );
-}
-
-function fixtureWithAllShells() {
-  const user = fixture();
-  writeFileSync(join(user, ".bashrc"), "export B=1\n");
-  mkdirSync(join(user, ".config", "fish"), { recursive: true });
-  writeFileSync(join(user, ".config", "fish", "config.fish"), "set -gx C 1\n");
-  return user;
-}
-
-const readRc = (user: string, ...segments: string[]) =>
-  readFileSync(join(user, ...segments), "utf8");
-
-test("disable sets CLAUDE_LITE_WRAP=0 in each shell rc once, enable removes it", async () => {
-  const user = fixtureWithAllShells();
-  expect(await disable(user, "/lite")).toBe(0);
-  await disable(user, "/lite");
-  expect(readRc(user, ".zshrc").match(/export CLAUDE_LITE_WRAP=0/g)?.length).toBe(1);
-  expect(readRc(user, ".bashrc").match(/export CLAUDE_LITE_WRAP=0/g)?.length).toBe(1);
-  expect(
-    readRc(user, ".config", "fish", "config.fish").match(/set -gx CLAUDE_LITE_WRAP 0/g)?.length,
-  ).toBe(1);
-  expect(await enable(user, "/lite")).toBe(0);
-  expect(readRc(user, ".zshrc")).toBe("export A=1\n");
-  expect(readRc(user, ".bashrc")).toBe("export B=1\n");
-  expect(readRc(user, ".config", "fish", "config.fish")).toBe("set -gx C 1\n");
-});
-
-test("disable survives install and uninstall removes it with the claude function", async () => {
-  const user = fixtureWithAllShells();
-  await install(user, "/lite");
-  await disable(user, "/lite");
-  await install(user, "/lite");
-  expect(readRc(user, ".zshrc")).toContain("export CLAUDE_LITE_WRAP=0");
-  expect(readRc(user, ".zshrc")).toContain("claude() {");
-  await uninstall(user, "/lite");
-  expect(readRc(user, ".zshrc")).toBe("export A=1\n");
-  expect(readRc(user, ".config", "fish", "config.fish")).toBe("set -gx C 1\n");
-});
-
-test("enable leaves the claude function installed", async () => {
-  const user = fixtureWithAllShells();
-  await install(user, "/lite");
-  await disable(user, "/lite");
-  await enable(user, "/lite");
-  expect(readRc(user, ".zshrc")).not.toContain("CLAUDE_LITE_WRAP=0");
-  expect(readRc(user, ".zshrc")).toContain("claude() {");
 });

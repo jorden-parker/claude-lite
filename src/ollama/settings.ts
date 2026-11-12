@@ -1,10 +1,6 @@
 import type { Size } from "./sizes.ts";
 
-export function renderSettings(
-  base: Record<string, any>,
-  hooks: unknown,
-  size: Size,
-): Record<string, any> {
+export function renderSettings(base: Record<string, any>, size: Size): Record<string, any> {
   const model = size.model;
   const extraBody = size.thinking
     ? size.effort && { output_config: { effort: size.effort } }
@@ -24,6 +20,5 @@ export function renderSettings(
       CLAUDE_CODE_MAX_OUTPUT_TOKENS: String(size.output_tokens),
       ...(extraBody && { CLAUDE_CODE_EXTRA_BODY: JSON.stringify(extraBody) }),
     },
-    hooks,
   };
 }

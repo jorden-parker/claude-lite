@@ -29,8 +29,6 @@ const sizeWith = (overrides: Partial<Size>): Size => ({
 });
 
 const initialState: ConfigState = {
-  claudeOverlay: { sandbox: { enabled: false, excludedCommands: ["x"] }, permissions: { ask: [] } },
-  claudeBase: { effortLevel: "medium", sandbox: { enabled: true } },
   ollamaOverlay: {},
   ollamaBase: { sandbox: { enabled: true } },
   baseSizes: { "27b": sizeWith({}), "9b": sizeWith({ thinking: true }) },
@@ -40,18 +38,13 @@ const initialState: ConfigState = {
 };
 
 const ROW_INDEX = {
-  model: 0,
-  claudeEffort: 1,
-  claudeSandbox: 2,
-  permissionMode: 3,
-  preferences: 4,
-  defaultSize: 5,
-  thinking: 6,
-  ollamaEffort: 7,
-  outputTokens: 8,
-  ollamaSandbox: 9,
-  ollamaPermissionMode: 10,
-  systemPrompt: 11,
+  defaultSize: 0,
+  thinking: 1,
+  ollamaEffort: 2,
+  outputTokens: 3,
+  ollamaSandbox: 4,
+  ollamaPermissionMode: 5,
+  systemPrompt: 6,
 };
 
 const pressAll = (state: ConfigState, keys: string[]) =>
@@ -63,17 +56,11 @@ const pressOnRow = (state: ConfigState, row: number, keys: string[]) =>
 const screenLine = (cursorMarker: string, label: string, value: string) =>
   `${cursorMarker} ${label.padEnd(20)}${value}`;
 
-test("renders every setting in both sections with the current values and the cursor", () => {
+test("renders every ollama setting with the current values and the cursor", () => {
   expect(renderConfig(initialState)).toContain(
     [
-      "Claude",
-      screenLine(">", "Model", "default"),
-      screenLine(" ", "Effort", "medium"),
-      screenLine(" ", "Sandbox", "off"),
-      screenLine(" ", "Permission mode", "default"),
-      screenLine(" ", "Preferences", "config/PREFERENCES.md ↵"),
       "Ollama",
-      screenLine(" ", "Default size", "auto (27b)"),
+      screenLine(">", "Default size", "auto (27b)"),
       screenLine(" ", "Thinking (27b)", "off"),
       screenLine(" ", "Effort (27b)", "unset"),
       screenLine(" ", "Output tokens (27b)", "10"),
@@ -84,39 +71,11 @@ test("renders every setting in both sections with the current values and the cur
   );
 });
 
-test("right on Model sets the model in the claude overlay and keeps other keys", () => {
-  const state = pressAll(initialState, [RIGHT]);
-  expect(state.claudeOverlay).toEqual({ ...initialState.claudeOverlay, model: "opus" });
-});
-
-test("left from opus back to default removes the model key", () => {
-  expect(pressAll(initialState, [RIGHT, LEFT]).claudeOverlay).toEqual(initialState.claudeOverlay);
-});
-
-test("left on Model wraps to the last choice", () => {
-  expect(pressAll(initialState, [LEFT]).claudeOverlay.model).toBe("haiku");
-});
-
-test("Claude effort starts from the base effort and cycles to the next level", () => {
-  expect(pressOnRow(initialState, ROW_INDEX.claudeEffort, [RIGHT]).claudeOverlay.effortLevel).toBe(
-    "high",
-  );
-});
-
-test("Claude sandbox toggles sandbox.enabled and keeps the other sandbox keys", () => {
-  const state = pressOnRow(initialState, ROW_INDEX.claudeSandbox, [RIGHT]);
-  expect(state.claudeOverlay.sandbox).toEqual({ enabled: true, excludedCommands: ["x"] });
-});
-
-test("Claude sandbox falls back to the base value without an overlay", () => {
-  const state = { ...initialState, claudeOverlay: {} };
-  expect(renderConfig(state)).toContain(screenLine(" ", "Sandbox", "on"));
-});
-
-test("permission mode sets permissions.defaultMode and default removes it", () => {
-  const state = pressOnRow(initialState, ROW_INDEX.permissionMode, [RIGHT]);
-  expect(state.claudeOverlay.permissions).toEqual({ ask: [], defaultMode: "acceptEdits" });
-  expect(pressAll(state, [LEFT]).claudeOverlay.permissions).toEqual({ ask: [] });
+test("the screen has no Claude rows", () => {
+  const screen = renderConfig(initialState);
+  expect(screen).not.toContain("Claude");
+  expect(screen).not.toContain("Preferences");
+  expect(screen).not.toContain("Model");
 });
 
 test("choosing a default size marks only that size in the sizes overlay", () => {
@@ -127,7 +86,7 @@ test("choosing a default size marks only that size in the sizes overlay", () => 
 
 test("the default size cycles back to auto, which removes every mark", () => {
   const marked = { ...initialState, sizesOverlay: { "9b": { default: true, thinking: true } } };
-  expect(renderConfig(marked)).toContain(screenLine(" ", "Default size", "9b"));
+  expect(renderConfig(marked)).toContain(screenLine(">", "Default size", "9b"));
   const stateWithAutoSize = pressOnRow(marked, ROW_INDEX.defaultSize, [RIGHT]);
   expect(stateWithAutoSize.sizesOverlay).toEqual({ "9b": { thinking: true } });
   expect(renderConfig(stateWithAutoSize)).toContain(screenLine(">", "Default size", "auto (27b)"));
@@ -162,12 +121,19 @@ test("ollama sandbox and permission mode go to the ollama overlay, not the size"
   const planMode = pressAll(sandboxOff, [DOWN, RIGHT, RIGHT]);
   expect(planMode.ollamaOverlay.permissions).toEqual({ defaultMode: "plan" });
   expect(planMode.sizesOverlay).toEqual({});
-  expect(planMode.claudeOverlay).toEqual(initialState.claudeOverlay);
 });
 
-test("enter on Preferences and System prompt asks to edit their file", () => {
-  const atPreferences = pressOnRow(initialState, ROW_INDEX.preferences, []);
-  expect(pressKey(atPreferences, "\r").edit).toBe("PREFERENCES.md");
+test("permission mode default removes defaultMode from the overlay", () => {
+  const state = pressOnRow(initialState, ROW_INDEX.ollamaPermissionMode, [RIGHT]);
+  expect(state.ollamaOverlay.permissions).toEqual({ defaultMode: "acceptEdits" });
+  expect(pressAll(state, [LEFT]).ollamaOverlay.permissions).toEqual({});
+});
+
+test("sandbox falls back to the base value without an overlay", () => {
+  expect(renderConfig(initialState)).toContain(screenLine(" ", "Sandbox", "on"));
+});
+
+test("enter on System prompt asks to edit its file, and other keys do nothing there", () => {
   const atSystemPrompt = pressOnRow(initialState, ROW_INDEX.systemPrompt, []);
   expect(pressKey(atSystemPrompt, "\r").edit).toBe("system-prompt.md");
   expect(pressKey(atSystemPrompt, RIGHT)).toEqual({ state: atSystemPrompt });
@@ -198,21 +164,17 @@ function liteHomeWith(files: Record<string, object>) {
 }
 
 const baseFiles = {
-  "claude.json": { effortLevel: "low" },
   "ollama.json": { sandbox: { enabled: true } },
   "sizes.json": { "27b": sizeWith({ memory_gb: 1 }), "9b": sizeWith({ memory_gb: 1 }) },
 };
 
-test("loadConfigState reads the overlays, the base effort and the base sizes", () => {
+test("loadConfigState reads the ollama overlay and base, and the base sizes", () => {
   const home = liteHomeWith({
     ...baseFiles,
-    "local-claude.json": { model: "opus" },
     "local-ollama.json": { sandbox: { enabled: false } },
     "local-sizes.json": { "9b": { default: true } },
   });
   const state = loadConfigState(home);
-  expect(state.claudeOverlay).toEqual({ model: "opus" });
-  expect(state.claudeBase).toEqual({ effortLevel: "low" });
   expect(state.ollamaOverlay).toEqual({ sandbox: { enabled: false } });
   expect(state.ollamaBase).toEqual({ sandbox: { enabled: true } });
   expect(Object.keys(state.baseSizes)).toEqual(["27b", "9b"]);
@@ -223,23 +185,23 @@ test("loadConfigState reads the overlays, the base effort and the base sizes", (
 
 test("loadConfigState treats missing overlays as empty", () => {
   const state = loadConfigState(liteHomeWith(baseFiles));
-  expect(state.claudeOverlay).toEqual({});
   expect(state.ollamaOverlay).toEqual({});
   expect(state.sizesOverlay).toEqual({});
 });
 
-test("saveConfigState writes every overlay as formatted JSON", () => {
+test("saveConfigState writes the ollama overlays as formatted JSON", () => {
   const home = liteHomeWith(baseFiles);
   saveConfigState(home, {
     ...loadConfigState(home),
-    claudeOverlay: { model: "haiku" },
     ollamaOverlay: { sandbox: { enabled: false } },
     sizesOverlay: { "9b": { default: true } },
   });
   const readConfigFile = (name: string) => readFileSync(join(home, "config", name), "utf8");
-  expect(readConfigFile("local-claude.json")).toBe('{\n  "model": "haiku"\n}\n');
-  expect(JSON.parse(readConfigFile("local-ollama.json"))).toEqual({ sandbox: { enabled: false } });
+  expect(readConfigFile("local-ollama.json")).toBe(
+    '{\n  "sandbox": {\n    "enabled": false\n  }\n}\n',
+  );
   expect(JSON.parse(readConfigFile("local-sizes.json"))).toEqual({ "9b": { default: true } });
+  expect(existsSync(join(home, "config", "local-claude.json"))).toBe(false);
 });
 
 test("cl config without a terminal prints the screen and writes nothing", async () => {
@@ -252,6 +214,6 @@ test("cl config without a terminal prints the screen and writes nothing", async 
   } finally {
     console.log = original;
   }
-  expect(lines.join("\n")).toContain(screenLine(">", "Model", "default"));
-  expect(existsSync(join(home, "config", "local-claude.json"))).toBe(false);
+  expect(lines.join("\n")).toContain(screenLine(">", "Default size", "auto (27b)"));
+  expect(existsSync(join(home, "config", "local-ollama.json"))).toBe(false);
 });

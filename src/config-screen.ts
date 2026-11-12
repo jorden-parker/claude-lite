@@ -6,8 +6,6 @@ import { defaultSize, type Size } from "./ollama/sizes.ts";
 type JsonObject = Record<string, any>;
 
 export type ConfigState = {
-  claudeOverlay: JsonObject;
-  claudeBase: JsonObject;
   ollamaOverlay: JsonObject;
   ollamaBase: JsonObject;
   baseSizes: Record<string, Size>;
@@ -16,10 +14,8 @@ export type ConfigState = {
   cursor: number;
 };
 
-type SettingsTarget = "claude" | "ollama";
-
 type ConfigRow = {
-  section: "Claude" | "Ollama";
+  section: "Ollama";
   label: string;
   value: string;
   choices: readonly string[];
@@ -29,8 +25,6 @@ type ConfigRow = {
 
 type KeyOutcome = { state: ConfigState; exit?: "save" | "cancel"; edit?: string };
 
-const CLAUDE_MODELS = ["default", "opus", "sonnet", "haiku"];
-const CLAUDE_EFFORTS = ["low", "medium", "high", "xhigh", "max"];
 const OLLAMA_EFFORTS = ["unset", ...EFFORT_LEVELS];
 const PERMISSION_MODES = ["default", "acceptEdits", "plan", "auto", "bypassPermissions"];
 const SWITCH_CHOICES = ["off", "on"];
@@ -66,64 +60,55 @@ function withSizeKey(state: ConfigState, key: string, value: unknown): ConfigSta
 
 const describeSwitch = (isOn: unknown) => (isOn ? "on" : "off");
 
-const selectOverlay = (state: ConfigState, target: SettingsTarget) => state[`${target}Overlay`];
-
-const selectBase = (state: ConfigState, target: SettingsTarget) => state[`${target}Base`];
-
-function withSettingsSection(
+function withOllamaSection(
   state: ConfigState,
-  target: SettingsTarget,
   section: string,
   sectionOverlay: JsonObject,
 ): ConfigState {
-  const overlay = { ...selectOverlay(state, target), [section]: sectionOverlay };
-  return { ...state, [`${target}Overlay`]: overlay };
+  return { ...state, ollamaOverlay: { ...state.ollamaOverlay, [section]: sectionOverlay } };
 }
 
-function withPermissionMode(state: ConfigState, target: SettingsTarget, mode: string) {
-  const permissions = selectOverlay(state, target).permissions ?? {};
-  const isBaseMode = (selectBase(state, target).permissions?.defaultMode ?? "default") === mode;
+function withPermissionMode(state: ConfigState, mode: string): ConfigState {
+  const permissions = state.ollamaOverlay.permissions ?? {};
+  const isBaseMode = (state.ollamaBase.permissions?.defaultMode ?? "default") === mode;
   const { defaultMode: _previous, ...permissionsWithoutMode } = permissions;
-  return withSettingsSection(
+  return withOllamaSection(
     state,
-    target,
     "permissions",
     isBaseMode ? permissionsWithoutMode : { ...permissionsWithoutMode, defaultMode: mode },
   );
 }
 
-function buildSandboxAndPermissionRows(state: ConfigState, target: SettingsTarget): ConfigRow[] {
-  const section = target === "claude" ? "Claude" : "Ollama";
-  const overlay = selectOverlay(state, target);
-  const base = selectBase(state, target);
+function buildSandboxAndPermissionRows(state: ConfigState): ConfigRow[] {
   return [
     {
-      section,
+      section: "Ollama",
       label: "Sandbox",
-      value: describeSwitch(overlay.sandbox?.enabled ?? base.sandbox?.enabled),
+      value: describeSwitch(
+        state.ollamaOverlay.sandbox?.enabled ?? state.ollamaBase.sandbox?.enabled,
+      ),
       choices: SWITCH_CHOICES,
       choose: (current, value) =>
-        withSettingsSection(current, target, "sandbox", {
-          ...selectOverlay(current, target).sandbox,
+        withOllamaSection(current, "sandbox", {
+          ...current.ollamaOverlay.sandbox,
           enabled: value === "on",
         }),
     },
     {
-      section,
+      section: "Ollama",
       label: "Permission mode",
-      value: overlay.permissions?.defaultMode ?? base.permissions?.defaultMode ?? "default",
+      value:
+        state.ollamaOverlay.permissions?.defaultMode ??
+        state.ollamaBase.permissions?.defaultMode ??
+        "default",
       choices: PERMISSION_MODES,
-      choose: (current, value) => withPermissionMode(current, target, value),
+      choose: (current, value) => withPermissionMode(current, value),
     },
   ];
 }
 
-const buildEditRow = (
-  section: ConfigRow["section"],
-  label: string,
-  editFile: string,
-): ConfigRow => ({
-  section,
+const buildEditRow = (label: string, editFile: string): ConfigRow => ({
+  section: "Ollama",
   label,
   value: `config/${editFile} ↵`,
   choices: [],
@@ -151,31 +136,8 @@ const listOutputTokenChoices = (current: number) =>
 function buildConfigRows(state: ConfigState): ConfigRow[] {
   const size = resolveChosenSize(state);
   const sizeSettings = mergeSizeSettings(state, size);
-  const { claudeBase, claudeOverlay } = state;
   const automaticChoice = `auto (${state.automaticSize})`;
   return [
-    {
-      section: "Claude",
-      label: "Model",
-      value: state.claudeOverlay.model ?? "default",
-      choices: CLAUDE_MODELS,
-      choose: (current, value) => ({
-        ...current,
-        claudeOverlay: withKey(current.claudeOverlay, "model", value),
-      }),
-    },
-    {
-      section: "Claude",
-      label: "Effort",
-      value: claudeOverlay.effortLevel ?? claudeBase.effortLevel ?? "medium",
-      choices: CLAUDE_EFFORTS,
-      choose: (current, value) => ({
-        ...current,
-        claudeOverlay: withKey(current.claudeOverlay, "effortLevel", value),
-      }),
-    },
-    ...buildSandboxAndPermissionRows(state, "claude"),
-    buildEditRow("Claude", "Preferences", "PREFERENCES.md"),
     {
       section: "Ollama",
       label: "Default size",
@@ -204,8 +166,8 @@ function buildConfigRows(state: ConfigState): ConfigRow[] {
       choices: listOutputTokenChoices(sizeSettings.output_tokens).map(String),
       choose: (current, value) => withSizeKey(current, "output_tokens", Number(value)),
     },
-    ...buildSandboxAndPermissionRows(state, "ollama"),
-    buildEditRow("Ollama", "System prompt", "system-prompt.md"),
+    ...buildSandboxAndPermissionRows(state),
+    buildEditRow("System prompt", "system-prompt.md"),
   ];
 }
 
@@ -250,8 +212,6 @@ const readOverlay = (path: string): JsonObject => (existsSync(path) ? readJson(p
 export function loadConfigState(home: string): ConfigState {
   const baseSizes = readJson(resolveConfigPath(home, "sizes.json")) as Record<string, Size>;
   return {
-    claudeOverlay: readOverlay(resolveConfigPath(home, "local-claude.json")),
-    claudeBase: readJson(resolveConfigPath(home, "claude.json")),
     ollamaOverlay: readOverlay(resolveConfigPath(home, "local-ollama.json")),
     ollamaBase: readJson(resolveConfigPath(home, "ollama.json")),
     baseSizes,
@@ -265,7 +225,6 @@ const writeJson = (path: string, contents: JsonObject) =>
   writeFileSync(path, `${JSON.stringify(contents, null, 2)}\n`);
 
 export function saveConfigState(home: string, state: ConfigState): void {
-  writeJson(resolveConfigPath(home, "local-claude.json"), state.claudeOverlay);
   writeJson(resolveConfigPath(home, "local-ollama.json"), state.ollamaOverlay);
   writeJson(resolveConfigPath(home, "local-sizes.json"), state.sizesOverlay);
 }

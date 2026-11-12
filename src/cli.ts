@@ -3,40 +3,31 @@ import { homedir } from "node:os";
 import { completionWords, nextWords } from "./completion.ts";
 import { liteHome } from "./home.ts";
 import { COMMAND_HELP, USAGE } from "./help.ts";
-import { runHook } from "./hooks/run-hook.ts";
 import {
+  build,
   config,
-  disable,
   doctor,
-  enable,
   fixServers,
   install,
   logs,
   servers,
-  settings,
-  stats,
   uninstall,
   update,
-  build,
 } from "./install.ts";
 import { bench } from "./ollama/bench.ts";
 import { launch } from "./ollama/launch.ts";
 
 const LIFECYCLE: Record<
-  Exclude<keyof typeof COMMAND_HELP, "hook" | "ollama" | "bench">,
+  Exclude<keyof typeof COMMAND_HELP, "ollama" | "bench">,
   (userHome: string, home: string) => Promise<number>
 > = {
   install,
   uninstall,
   update,
   build,
-  disable,
-  enable,
   doctor,
   logs,
   servers,
-  settings,
-  stats,
   config,
   "fix-servers": fixServers,
 };
@@ -54,17 +45,11 @@ async function runLifecycle(name: keyof typeof LIFECYCLE, extraArgs: string[], h
     return 2;
   }
   const code = await LIFECYCLE[name](process.env.HOME ?? homedir(), home);
-  if (name === "settings" || name === "config") return code;
+  if (name === "config") return code;
   console.log(
     code === 0 ? `claude-lite: ${name} done` : `claude-lite: ${name} failed (exit ${code})`,
   );
   return code;
-}
-
-function runHookCommand(hookName: string | undefined) {
-  if (hookName) return runHook(hookName);
-  console.error(COMMAND_HELP.hook);
-  return 2;
 }
 
 function printHelp(topic: string | undefined) {
@@ -74,8 +59,7 @@ function printHelp(topic: string | undefined) {
 
 type ArgumentCommand = (home: string, commandArgs: string[]) => Promise<number>;
 
-const ARGUMENT_COMMANDS: Record<"hook" | "ollama" | "bench", ArgumentCommand> = {
-  hook: async (_home, commandArgs) => runHookCommand(commandArgs[0]),
+const ARGUMENT_COMMANDS: Record<"ollama" | "bench", ArgumentCommand> = {
   ollama: launch,
   bench,
 };

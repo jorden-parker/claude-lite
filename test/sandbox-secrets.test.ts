@@ -1,6 +1,5 @@
 import { expect, test } from "bun:test";
 import { join } from "node:path";
-import { settings } from "../src/install.ts";
 import { launch } from "../src/ollama/launch.ts";
 import { loadSandboxSecrets, withSandboxSecrets } from "../src/sandbox-secrets.ts";
 
@@ -36,13 +35,6 @@ test("withSandboxSecrets unions the shared lists without duplicates", () => {
 
 test("a home without sandbox-secrets.json has no shared secrets", () => {
   expect(loadSandboxSecrets("/nonexistent")).toBeNull();
-});
-
-test("the anthropic settings deny every shared secret", async () => {
-  const [line] = await printedBy(() => settings("/unused", home));
-  const { sandbox } = JSON.parse(line);
-  expect(sandbox.filesystem.denyRead).toEqual(expect.arrayContaining(secrets.denyRead));
-  expect(deniedNames(sandbox)).toEqual(expect.arrayContaining(secrets.envVars));
 });
 
 test("the ollama settings deny every shared secret", async () => {

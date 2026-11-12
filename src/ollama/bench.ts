@@ -10,7 +10,7 @@ import {
   type ToolCall,
 } from "./api.ts";
 import { resolveSize, type Size } from "./sizes.ts";
-import { decide as bashGuard } from "../hooks/bash-guard.ts";
+import { unboundedGitLogReason } from "./git-log-guard.ts";
 
 const defineTool = (name: string, description: string, properties: Record<string, unknown>) => ({
   type: "function",
@@ -72,12 +72,6 @@ const deniedCall: ChatMessage = {
   role: "assistant",
   content: "",
   tool_calls: [{ function: { name: "Bash", arguments: { command: DENIED_COMMAND } } }],
-};
-const denyReason = (command: string): string | null => {
-  const denial = bashGuard({ tool_input: { command } })?.output as
-    | { hookSpecificOutput?: { permissionDecisionReason?: string } }
-    | undefined;
-  return denial?.hookSpecificOutput?.permissionDecisionReason ?? null;
 };
 
 export const TASKS: BenchTask[] = [
@@ -158,14 +152,14 @@ export const TASKS: BenchTask[] = [
     prompt: "Show me the recent commits in this repository.",
     history: [
       deniedCall,
-      { role: "tool", content: `Denied by a hook: ${denyReason(DENIED_COMMAND)}` },
+      { role: "tool", content: `Denied by a hook: ${unboundedGitLogReason(DENIED_COMMAND)}` },
     ],
     check: (message) => {
       const call = expectOnlyCall(message, "Bash");
       if (typeof call === "string") return call;
       const command = argumentText(call, "command");
       if (command.trim() === DENIED_COMMAND) return "retried the denied command unchanged";
-      return denyReason(command) === null ? null : `still denied: ${command}`;
+      return unboundedGitLogReason(command) === null ? null : `still denied: ${command}`;
     },
   },
 ];

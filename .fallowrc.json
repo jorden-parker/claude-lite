@@ -1,4 +1,3 @@
 {
-  "$schema": "https://raw.githubusercontent.com/fallow-rs/fallow/main/schema.json",
-  "ignoreExports": [{ "file": "src/hooks/*.ts", "exports": ["decide"] }]
+  "$schema": "https://raw.githubusercontent.com/fallow-rs/fallow/main/schema.json"
 }

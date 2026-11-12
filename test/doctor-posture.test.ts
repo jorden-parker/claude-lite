@@ -7,7 +7,7 @@ import { doctor } from "../src/install.ts";
 function liteHomeWithOverlay(overlay: object) {
   const home = mkdtempSync(join(tmpdir(), "posture-"));
   cpSync(join(import.meta.dir, "..", "config"), join(home, "config"), { recursive: true });
-  writeFileSync(join(home, "config", "local-claude.json"), JSON.stringify(overlay));
+  writeFileSync(join(home, "config", "local-ollama.json"), JSON.stringify(overlay));
   return home;
 }
 

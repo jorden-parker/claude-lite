@@ -14,48 +14,29 @@ import {
 } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { completionPath, completionScript, END, type Shell, START } from "./completion.ts";
-import { summarizeHookLog } from "./hook-stats.ts";
-import { HOOK_NAMES, hookLogPath } from "./hooks/run-hook.ts";
-import {
-  isSupportedVersion,
-  MINIMUM_OLLAMA,
-  type Runner,
-  serverResponds,
-  serverStatus,
-  spawnRunner,
-} from "./ollama/launch.ts";
 import {
   loadConfigState,
   renderConfig,
   runConfigScreen,
   saveConfigState,
 } from "./config-screen.ts";
-import { withJsonOverlay } from "./json-overlay.ts";
-import { withSharedSecrets } from "./sandbox-secrets.ts";
+import {
+  isSupportedVersion,
+  MINIMUM_OLLAMA,
+  ollamaBaseSettings,
+  type Runner,
+  serverResponds,
+  serverStatus,
+  spawnRunner,
+} from "./ollama/launch.ts";
+import { loadSizes } from "./ollama/sizes.ts";
 
 const BLOCK = new RegExp(`\\n?${START}[\\s\\S]*?${END}\\n?`);
 
-const claudeMdBlock = (home: string) =>
-  `${START}\n@${join(home, "config", "PREFERENCES.md")}\n${END}\n`;
-const claudeFunction = (home: string) =>
-  `claude() { if [ "\${CLAUDE_LITE_WRAP:-1}" = 0 ]; then command claude "$@"; else env CLAUDE_LITE_HOME="${home}" command claude --settings "$("${home}/dist/claude-lite" settings)" "$@"; fi; }`;
-const zshBlock = (userHome: string, home: string) =>
-  `${START}\n${claudeFunction(home)}\nfpath+=(${dirname(completionPath(userHome, "zsh"))})\n_cl_register() {\n  add-zsh-hook -d precmd _cl_register\n  unfunction _cl_register\n  (( $+functions[compdef] )) || { autoload -Uz compinit; compinit; }\n  autoload -Uz _cl\n  compdef _cl cl\n}\nautoload -Uz add-zsh-hook\nadd-zsh-hook precmd _cl_register\n${END}\n`;
-const bashBlock = (userHome: string, home: string) =>
-  `${START}\n${claudeFunction(home)}\n[ -f ${completionPath(userHome, "bash")} ] && . ${completionPath(userHome, "bash")}\n${END}\n`;
-const fishBlock = (home: string) =>
-  `${START}\nfunction claude\n  if test "$CLAUDE_LITE_WRAP" = 0\n    command claude $argv\n  else\n    env CLAUDE_LITE_HOME="${home}" command claude --settings ("${home}/dist/claude-lite" settings) $argv\n  end\nend\n${END}\n`;
-
-const WRAP_OFF_START = "# >>> claude-lite wrap off >>>";
-const WRAP_OFF_END = "# <<< claude-lite wrap off <<<";
-const WRAP_OFF_BLOCK = new RegExp(`\\n?${WRAP_OFF_START}[\\s\\S]*?${WRAP_OFF_END}\\n?`);
-const WRAP_OFF_LINES: Record<Shell, string> = {
-  zsh: "export CLAUDE_LITE_WRAP=0",
-  bash: "export CLAUDE_LITE_WRAP=0",
-  fish: "set -gx CLAUDE_LITE_WRAP 0",
-};
-const wrapOffBlock = (shell: Shell) =>
-  `${WRAP_OFF_START}\n${WRAP_OFF_LINES[shell]}\n${WRAP_OFF_END}\n`;
+const zshBlock = (userHome: string) =>
+  `${START}\nfpath+=(${dirname(completionPath(userHome, "zsh"))})\n_cl_register() {\n  add-zsh-hook -d precmd _cl_register\n  unfunction _cl_register\n  (( $+functions[compdef] )) || { autoload -Uz compinit; compinit; }\n  autoload -Uz _cl\n  compdef _cl cl\n}\nautoload -Uz add-zsh-hook\nadd-zsh-hook precmd _cl_register\n${END}\n`;
+const bashBlock = (userHome: string) =>
+  `${START}\n[ -f ${completionPath(userHome, "bash")} ] && . ${completionPath(userHome, "bash")}\n${END}\n`;
 
 const SHELL_RCS: [Shell, string[]][] = [
   ["zsh", [".zshrc"]],
@@ -63,22 +44,28 @@ const SHELL_RCS: [Shell, string[]][] = [
   ["fish", [".config", "fish", "config.fish"]],
 ];
 
-function targets(userHome: string, home: string): [string, string][] {
-  const claudeMd = join(userHome, ".claude", "CLAUDE.md");
-  const blocks: Record<Shell, string> = {
-    zsh: zshBlock(userHome, home),
-    bash: bashBlock(userHome, home),
-    fish: fishBlock(home),
-  };
-  const rcs = SHELL_RCS.map(([shell, rc]): [string, string] => [
-    join(userHome, ...rc),
-    blocks[shell],
-  ]);
-  return [[claudeMd, claudeMdBlock(home)], ...rcs.filter(([path]) => existsSync(path))];
+const RC_BLOCKS: Partial<Record<Shell, (userHome: string) => string>> = {
+  zsh: zshBlock,
+  bash: bashBlock,
+};
+
+const rcPath = (userHome: string, rc: string[]) => join(userHome, ...rc);
+
+function rcTargets(userHome: string): [string, string][] {
+  return SHELL_RCS.flatMap(([shell, rc]): [string, string][] => {
+    const makeBlock = RC_BLOCKS[shell];
+    const path = rcPath(userHome, rc);
+    return makeBlock && existsSync(path) ? [[path, makeBlock(userHome)]] : [];
+  });
 }
 
+const blockFiles = (userHome: string) => [
+  join(userHome, ".claude", "CLAUDE.md"),
+  ...SHELL_RCS.map(([, rc]) => rcPath(userHome, rc)),
+];
+
 const presentShells = (userHome: string) =>
-  SHELL_RCS.filter(([, rc]) => existsSync(join(userHome, ...rc))).map(([shell]) => shell);
+  SHELL_RCS.filter(([, rc]) => existsSync(rcPath(userHome, rc))).map(([shell]) => shell);
 
 function writeCompletions(userHome: string) {
   for (const shell of presentShells(userHome)) {
@@ -93,6 +80,16 @@ function removeCompletions(userHome: string) {
     const path = completionPath(userHome, shell);
     if (existsSync(path) && BLOCK.test(readFileSync(path, "utf8"))) unlinkSync(path);
   }
+}
+
+function completionInstalled(userHome: string): boolean {
+  const blocksWritten = rcTargets(userHome).every(([path, block]) =>
+    readFileSync(path, "utf8").includes(block),
+  );
+  const filesWritten = presentShells(userHome).every((shell) =>
+    existsSync(completionPath(userHome, shell)),
+  );
+  return blocksWritten && filesWritten;
 }
 
 function rewrite(path: string, update: (text: string) => string) {
@@ -135,11 +132,6 @@ function unlinkCl(userHome: string, home: string) {
   if (readLink(link) === binaryPath(home)) unlinkSync(link);
 }
 
-const presentShellRcs = (userHome: string): [Shell, string][] =>
-  SHELL_RCS.map(([shell, rc]): [Shell, string] => [shell, join(userHome, ...rc)]).filter(
-    ([, path]) => existsSync(path),
-  );
-
 function appendBlock(text: string, blockPattern: RegExp, block: string) {
   const stripped = text.replace(blockPattern, "");
   return `${stripped}${stripped && !stripped.endsWith("\n") ? "\n" : ""}\n${block}`.replace(
@@ -149,7 +141,7 @@ function appendBlock(text: string, blockPattern: RegExp, block: string) {
 }
 
 export async function install(userHome: string, home: string): Promise<number> {
-  for (const [path, block] of targets(userHome, home)) {
+  for (const [path, block] of rcTargets(userHome)) {
     rewrite(path, (text) => appendBlock(text, BLOCK, block));
   }
   writeCompletions(userHome);
@@ -158,33 +150,12 @@ export async function install(userHome: string, home: string): Promise<number> {
 }
 
 export async function uninstall(userHome: string, home: string): Promise<number> {
-  for (const [path] of targets(userHome, home)) {
+  for (const path of blockFiles(userHome)) {
     if (existsSync(path)) rewrite(path, (text) => text.replace(BLOCK, ""));
   }
-  removeWrapOff(userHome);
   removeCompletions(userHome);
   unlinkCl(userHome, home);
   rmSync(serverEnvAgentPath(userHome), { force: true });
-  return 0;
-}
-
-function removeWrapOff(userHome: string) {
-  for (const [, path] of presentShellRcs(userHome)) {
-    rewrite(path, (text) => text.replace(WRAP_OFF_BLOCK, ""));
-  }
-}
-
-export async function disable(userHome: string, _home: string): Promise<number> {
-  for (const [shell, path] of presentShellRcs(userHome)) {
-    rewrite(path, (text) => appendBlock(text, WRAP_OFF_BLOCK, wrapOffBlock(shell)));
-  }
-  console.log("claude-lite: open a new shell; claude now runs without claude-lite");
-  return 0;
-}
-
-export async function enable(userHome: string, _home: string): Promise<number> {
-  removeWrapOff(userHome);
-  console.log("claude-lite: open a new shell; claude now runs with claude-lite");
   return 0;
 }
 
@@ -222,52 +193,22 @@ export async function logs(
   run: Runner = spawnRunner,
   systemRoot = "/",
 ): Promise<number> {
-  return await run([
-    "tail",
-    "-F",
-    "-n",
-    "20",
-    hookLogPath(userHome),
-    ...ollamaLogPaths(userHome, systemRoot),
-  ]);
-}
-
-function configsParseWithKnownHooks(home: string): [boolean, boolean] {
-  try {
-    const texts = ["claude.json", "hooks.json"].map((name) =>
-      readFileSync(join(home, "config", name), "utf8"),
-    );
-    texts.forEach((text) => JSON.parse(text));
-    const names = texts.flatMap((text) => [...text.matchAll(/ hook ([\w-]+)/g)].map((m) => m[1]));
-    return [true, names.every((name) => HOOK_NAMES.includes(name))];
-  } catch {
-    return [false, false];
+  const paths = ollamaLogPaths(userHome, systemRoot);
+  if (paths.length === 0) {
+    console.error("claude-lite: no Ollama log file found");
+    return 1;
   }
+  return await run(["tail", "-F", "-n", "20", ...paths]);
 }
 
-function blocksInstalled(userHome: string, home: string): boolean {
-  return targets(userHome, home).every(
-    ([path, block]) => existsSync(path) && readFileSync(path, "utf8").includes(block),
-  );
-}
-
-const CRASH_WINDOW_MS = 24 * 60 * 60 * 1000;
-
-function crashTime(logLine: string): number {
+function configFilesParse(home: string): boolean {
   try {
-    const entry = JSON.parse(logLine);
-    return entry.crashed ? Date.parse(entry.time) : Number.NaN;
+    ollamaBaseSettings(home);
+    loadSizes(home);
+    return true;
   } catch {
-    return Number.NaN;
+    return false;
   }
-}
-
-export function recentHookCrashes(userHome: string, now = Date.now()): number {
-  const logPath = hookLogPath(userHome);
-  if (!existsSync(logPath)) return 0;
-  return readFileSync(logPath, "utf8")
-    .split("\n")
-    .filter((logLine) => now - crashTime(logLine) < CRASH_WINDOW_MS).length;
 }
 
 export async function doctor(
@@ -277,24 +218,17 @@ export async function doctor(
   systemRoot = "/",
 ): Promise<number> {
   const binaryBuilt = existsSync(binaryPath(home));
-  const [settingsValid, hooksKnown] = configsParseWithKnownHooks(home);
   const server = await serverStatus(run);
   const checks: [string, boolean][] = [
     ["binary built", binaryBuilt],
     ["binary runs", binaryBuilt && (await run([binaryPath(home), "--help"])) === 0],
-    ["blocks installed", blocksInstalled(userHome, home)],
+    ["shell completion installed", completionInstalled(userHome)],
     ["cl link", readLink(clLinkPath(userHome)) === binaryPath(home)],
-    ["settings valid", settingsValid],
-    ["hooks known", hooksKnown],
-    ["no hook crashes in the last day", recentHookCrashes(userHome) === 0],
+    ["config files parse", configFilesParse(home)],
     ["ollama server responds", server.isResponding],
     [`ollama ${MINIMUM_OLLAMA} or newer`, isSupportedVersion(server.version)],
     ["one ollama startup source", ollamaStartupSources(userHome, systemRoot).length <= 1],
     ["ollama server env set", (await run(["sh", "-c", serverEnvCheck()])) === 0],
-    [
-      "agent-browser runs",
-      (await run(["sh", "-c", "agent-browser --version >/dev/null 2>&1"])) === 0,
-    ],
   ];
   for (const [label, ok] of checks) console.log(`${ok ? "ok  " : "FAIL"} ${label}`);
   for (const line of securityPosture(home)) console.log(line);
@@ -434,21 +368,9 @@ export async function fixServers(
   return needSudo.length ? 1 : 0;
 }
 
-function sharedHooks(home: string): { hooks?: unknown } {
-  const hooksPath = join(home, "config", "hooks.json");
-  return existsSync(hooksPath) ? { hooks: JSON.parse(readFileSync(hooksPath, "utf8")) } : {};
-}
-
-function effectiveSettings(home: string): Record<string, any> {
-  const claudeSettings = JSON.parse(readFileSync(join(home, "config", "claude.json"), "utf8"));
-  const base = { ...claudeSettings, ...sharedHooks(home) };
-  const overlaid = withJsonOverlay(base, join(home, "config", "local-claude.json"));
-  return withSharedSecrets(overlaid, home);
-}
-
 function securityPosture(home: string): string[] {
   try {
-    const effective = effectiveSettings(home);
+    const effective = ollamaBaseSettings(home);
     return [
       `info sandbox ${effective.sandbox?.enabled === true ? "on" : "off"}`,
       `info permission mode ${effective.permissions?.defaultMode ?? "default"}`,
@@ -456,17 +378,6 @@ function securityPosture(home: string): string[] {
   } catch {
     return [];
   }
-}
-
-export async function stats(userHome: string, _home: string): Promise<number> {
-  const logPath = hookLogPath(userHome);
-  console.log(summarizeHookLog(existsSync(logPath) ? readFileSync(logPath, "utf8") : ""));
-  return 0;
-}
-
-export async function settings(_userHome: string, home: string): Promise<number> {
-  console.log(JSON.stringify(effectiveSettings(home)));
-  return 0;
 }
 
 export async function config(_userHome: string, home: string): Promise<number> {
