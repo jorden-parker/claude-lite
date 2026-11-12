@@ -149,6 +149,20 @@ test("mlx caps the prefix trie cache by entries and memory", async () => {
   expect(valueOf("--prefix-trie-cache-memory-mb")).toBe("8192");
 });
 
+test("mlx prefills in 4096-token steps", async () => {
+  const { serverCommands, dependencies } = harness();
+  await launchMlx(home, ["35b"], dependencies);
+  const server = serverCommands[0];
+  expect(server[server.indexOf("--prefill-step-size") + 1]).toBe("4096");
+});
+
+test("mlx leaves out the flags that turn off vllm-mlx prompt caching", async () => {
+  const { serverCommands, dependencies } = harness();
+  await launchMlx(home, ["35b"], dependencies);
+  for (const flag of ["--enable-mtp", "--specprefill", "--max-kv-size"])
+    expect(serverCommands[0]).not.toContain(flag);
+});
+
 test("mlx skips the ollama unload when OLLAMA_HOST is another machine", async () => {
   const previous = process.env.OLLAMA_HOST;
   process.env.OLLAMA_HOST = "studio.local:11434";

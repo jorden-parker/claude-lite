@@ -23,6 +23,7 @@ const QWEN_TOOL_PARSER = "qwen3_xml";
 const QWEN_REASONING_PARSER = "qwen3";
 const PREFIX_TRIE_CACHE_ENTRIES = "4";
 const PREFIX_TRIE_CACHE_MEMORY_MB = "8192";
+const PREFILL_STEP_TOKENS = "4096";
 const SAMPLING = ["temperature", "top_p", "top_k", "min_p", "presence_penalty"];
 
 type MlxServer = { exited: Promise<number>; stop: () => void };
@@ -100,6 +101,8 @@ function serverCommand(size: Size, model: string): string[] {
     PREFIX_TRIE_CACHE_ENTRIES,
     "--prefix-trie-cache-memory-mb",
     PREFIX_TRIE_CACHE_MEMORY_MB,
+    "--prefill-step-size",
+    PREFILL_STEP_TOKENS,
     "--default-chat-template-kwargs",
     JSON.stringify(
       size.thinking
