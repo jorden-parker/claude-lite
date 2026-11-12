@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { isRemoteHost, unloadModels } from "./ollama/api.ts";
-import { launchSettings, type Runner, runClaude, spawnRunner } from "./ollama/launch.ts";
+import { renderLaunchSettings, type Runner, runClaude, spawnRunner } from "./ollama/launch.ts";
 import { resolveSize, type Size } from "./ollama/sizes.ts";
 
 export const MLX_URL = "http://127.0.0.1:11435";
@@ -102,7 +102,7 @@ export async function launchMlx(
     console.error(`size ${name} has no mlx model; add "mlx" to it in config/sizes.json`);
     return 1;
   }
-  const settings = launchSettings(home, { ...size, model }, MLX_URL);
+  const settings = renderLaunchSettings(home, { ...size, model }, MLX_URL);
   const command = serverCommand(size, model);
   if (isPrintOnly) {
     console.log(command.join(" "));

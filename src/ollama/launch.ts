@@ -69,25 +69,33 @@ export function ollamaBaseSettings(home: string): Record<string, any> {
   return withSharedSecrets(overlaid, home);
 }
 
-export function launchSettings(home: string, size: Size, serverUrl?: string) {
+export function renderLaunchSettings(home: string, size: Size, serverUrl?: string) {
   const rendered = {
     ...renderSettings(ollamaBaseSettings(home), size),
-    enabledPlugins: disabledUserPlugins(),
+    enabledPlugins: disabledBuiltinPlugins(),
   };
   return serverUrl ? withServerUrl(rendered, serverUrl) : rendered;
 }
 
 function buildPlan(home: string, args: string[]) {
   const { name, size, claudeArgs } = resolveSize(home, args);
-  const settings = launchSettings(home, size, process.env.OLLAMA_HOST ? ollamaUrl() : undefined);
+  const settings = renderLaunchSettings(
+    home,
+    size,
+    process.env.OLLAMA_HOST ? ollamaUrl() : undefined,
+  );
   return { name, size, settings, modelfile: renderModelfile(size), claudeArgs };
 }
 
-function disabledUserPlugins(): Record<string, false> {
+function disabledBuiltinPlugins(): Record<string, false> {
   const configDir = process.env.CLAUDE_CONFIG_DIR ?? join(homedir(), ".claude");
   try {
     const { enabledPlugins } = JSON.parse(readFileSync(join(configDir, "settings.json"), "utf8"));
-    return Object.fromEntries(Object.keys(enabledPlugins ?? {}).map((name) => [name, false]));
+    return Object.fromEntries(
+      Object.keys(enabledPlugins ?? {})
+        .filter((name) => name.endsWith("@builtin"))
+        .map((name) => [name, false]),
+    );
   } catch {
     return {};
   }
