@@ -8,7 +8,8 @@
     "parameters": {
       "temperature": 0.7,
       "top_k": 20,
-      "top_p": 0.8
+      "top_p": 0.8,
+      "min_p": 0
     },
     "memory_gb": 16.9
   },
@@ -19,9 +20,9 @@
     "output_tokens": 8192,
     "thinking": false,
     "parameters": {
-      "temperature": 0.6,
+      "temperature": 0.7,
       "top_k": 20,
-      "top_p": 0.95,
+      "top_p": 0.8,
       "min_p": 0
     },
     "memory_gb": 22.0

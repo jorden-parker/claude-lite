@@ -89,8 +89,15 @@ function disabledUserPlugins(): Record<string, false> {
   }
 }
 
-export function loadFailureHint(home: string, sizeName: string, memoryBytes = totalmem()): string {
-  const smaller = fittingSizes(loadSizes(home), memoryBytes).filter((name) => name !== sizeName);
+export function loadFailureHint(
+  home: string,
+  sizeName: string,
+  memoryBytes = totalmem(),
+  wiredLimitMb?: number,
+): string {
+  const smaller = fittingSizes(loadSizes(home), memoryBytes, wiredLimitMb).filter(
+    (name) => name !== sizeName,
+  );
   return smaller.length
     ? `sizes that fit this machine: ${smaller.map((name) => `cl ollama ${name}`).join(", ")}`
     : "no configured size fits this machine; add a smaller one to config/local-sizes.json";

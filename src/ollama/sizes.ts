@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { totalmem } from "node:os";
 import { join } from "node:path";
@@ -17,7 +18,7 @@ export type Size = {
   memory_gb?: number;
 };
 
-export const PREFERRED_SIZE = "27b";
+export const PREFERRED_SIZE = "35b";
 
 const GIB = 1024 ** 3;
 const METAL_BUDGET_FRACTION = 0.7;
@@ -34,20 +35,39 @@ function pickSize(sizes: Record<string, Size>, name: string): Size {
   return size;
 }
 
-export const memoryBudgetGb = (memoryBytes: number) => (memoryBytes / GIB) * METAL_BUDGET_FRACTION;
+function readWiredLimitMb(): number {
+  if (process.platform !== "darwin") return 0;
+  try {
+    const output = execFileSync("sysctl", ["-n", "iogpu.wired_limit_mb"], { encoding: "utf8" });
+    return Number.parseInt(output, 10) || 0;
+  } catch {
+    return 0;
+  }
+}
+
+export const memoryBudgetGb = (memoryBytes: number, wiredLimitMb = readWiredLimitMb()) =>
+  wiredLimitMb > 0 ? wiredLimitMb / 1024 : (memoryBytes / GIB) * METAL_BUDGET_FRACTION;
 
 const fits = (size: Size, budgetGb: number) =>
   size.memory_gb === undefined || size.memory_gb <= budgetGb;
 
-export function fittingSizes(sizes: Record<string, Size>, memoryBytes: number): string[] {
-  const budget = memoryBudgetGb(memoryBytes);
+export function fittingSizes(
+  sizes: Record<string, Size>,
+  memoryBytes: number,
+  wiredLimitMb = readWiredLimitMb(),
+): string[] {
+  const budget = memoryBudgetGb(memoryBytes, wiredLimitMb);
   return Object.keys(sizes).filter((name) => fits(sizes[name], budget));
 }
 
-export function defaultSize(sizes: Record<string, Size>, memoryBytes = totalmem()): string {
+export function defaultSize(
+  sizes: Record<string, Size>,
+  memoryBytes = totalmem(),
+  wiredLimitMb = readWiredLimitMb(),
+): string {
   const marked = Object.keys(sizes).find((name) => sizes[name].default === true);
   if (marked) return marked;
-  const fitting = fittingSizes(sizes, memoryBytes);
+  const fitting = fittingSizes(sizes, memoryBytes, wiredLimitMb);
   if (fitting.includes(PREFERRED_SIZE)) return PREFERRED_SIZE;
   const largest = fitting
     .filter((name) => sizes[name].memory_gb !== undefined)
@@ -62,12 +82,15 @@ export function resolveSize(
   args: string[],
   env: Record<string, string | undefined> = process.env,
   memoryBytes = totalmem(),
+  wiredLimitMb = readWiredLimitMb(),
 ): ResolvedSize {
   const sizes = loadSizes(home);
   const [first, ...rest] = args;
   const isSize = first !== undefined && Object.hasOwn(sizes, first);
-  const memoryLimit = isRemoteHost(env) ? Number.POSITIVE_INFINITY : memoryBytes;
-  const name = isSize ? first : defaultSize(sizes, memoryLimit);
+  const isRemote = isRemoteHost(env);
+  const memoryLimit = isRemote ? Number.POSITIVE_INFINITY : memoryBytes;
+  const wiredLimit = isRemote ? 0 : wiredLimitMb;
+  const name = isSize ? first : defaultSize(sizes, memoryLimit, wiredLimit);
   const { size, claudeArgs } = applyFlags(
     applyEnv(pickSize(sizes, name), env),
     isSize ? rest : args,

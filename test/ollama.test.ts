@@ -286,7 +286,9 @@ test("launch stops with a hint when the model does not fit in memory", async () 
 });
 
 test("load failure hint names the sizes that fit, or says none does", () => {
-  expect(loadFailureHint(home, "27b", 16 * GIB)).toBe("sizes that fit this machine: cl ollama 9b");
-  expect(loadFailureHint(home, "35b", 64 * GIB)).toContain("cl ollama 27b");
-  expect(loadFailureHint(home, "9b", 8 * GIB)).toContain("no configured size fits");
+  expect(loadFailureHint(home, "27b", 16 * GIB, 0)).toBe(
+    "sizes that fit this machine: cl ollama 9b",
+  );
+  expect(loadFailureHint(home, "35b", 64 * GIB, 0)).toContain("cl ollama 27b");
+  expect(loadFailureHint(home, "9b", 8 * GIB, 0)).toContain("no configured size fits");
 });

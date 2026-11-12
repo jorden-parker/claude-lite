@@ -12,7 +12,7 @@ An Ollama launcher for Claude Code, in TypeScript and Bun. Hooks, rules and styl
     cl uninstall                 # removes what install added and the server env login agent that cl servers writes
     cl doctor                    # checks the build, shell completion, the cl link, config files, Ollama version, one startup source and the server env; prints the Ollama sandbox and permission mode
     cl logs                      # follows the Ollama logs named in its launchd plists or Ollama.app
-    cl servers                   # finds duplicate Ollama servers on port 11434; checks the server responds; sets the server env (keep-alive, one parallel request, flash attention, q8 KV cache, one loaded model) and writes a login agent that sets it again after a reboot
+    cl servers                   # finds duplicate Ollama servers on port 11434; checks the server responds; sets the server env (keep-alive, one parallel request, flash attention, q8 KV cache, one loaded model; flash attention and the q8 KV cache reach only GGUF sizes like `9b`, not the MLX `27b` and `35b`) and writes a login agent that sets it again after a reboot
     cl fix-servers               # keeps Ollama.app; moves leftover Ollama LaunchAgents to ~/.Trash
     cl config                    # screen for the Ollama default size, thinking, effort, output tokens, sandbox, permission mode and system prompt
     cl ollama [size]             # launches Claude Code on a local model (see below)
@@ -38,8 +38,8 @@ Older versions wrapped `claude` through an rc function and a CLAUDE.md import. R
 
 Pulls the base model and creates the `-cc` model when missing or when its parameters no longer match the size, loads it, then runs `claude` with settings from
 `config/ollama.json` (which denies `Agent`) and `config/system-prompt.md`. Sizes live in `config/sizes.json`; each records the `memory_gb`
-Ollama needs to load it (its own estimate at the size's context). The default size is `27b` when that fits
-the machine (Ollama gets about 70% of RAM on Apple Silicon), otherwise the largest size that fits: `9b` on 16 GB.
+Ollama needs to load it (its own estimate at the size's context). The default size is `35b` when that fits
+the machine (Ollama gets about 70% of RAM on Apple Silicon, or the `iogpu.wired_limit_mb` you set with `sudo sysctl` when it is positive), otherwise the largest size that fits: `9b` on 16 GB.
 When the load fails, for example because the model needs more memory, the launcher prints Ollama's reason and the
 sizes that do fit instead of starting `claude` against a model that cannot answer.
 It also loads no MCP servers (`--strict-mcp-config`) and turns off every plugin your `~/.claude/settings.json` enables:
