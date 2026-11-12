@@ -281,7 +281,7 @@ test("mlx --print-config prints the server command, settings path and settings w
   expect(modelSettingsWrites).toEqual([]);
   expect(lines[0]).toContain("omlx serve");
   expect(lines[1]).toContain(join(DATA_DIR, "model_settings.json"));
-  expect(JSON.parse(lines[2]).models[SERVED_35B].max_context_window).toBe(65536);
+  expect(JSON.parse(lines[2]).models[SERVED_35B].max_context_window).toBe(131072);
   expect(JSON.parse(lines[3]).env.ANTHROPIC_BASE_URL).toBe(mlxUrl());
 });
 

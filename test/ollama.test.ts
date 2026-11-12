@@ -62,7 +62,7 @@ test("existing model skips pull and create", async () => {
   const claude = calls[2];
   expect(claude[0]).toBe("claude");
   expect(claude.slice(-2)).toEqual(["-p", "hi"]);
-  expect(claude[claude.indexOf("--model") + 1]).toBe("qwen3.6-35b-64k-cc");
+  expect(claude[claude.indexOf("--model") + 1]).toBe("qwen3.6-35b-128k-cc");
   expect(envs[2].ANTHROPIC_BASE_URL).toBe("http://127.0.0.1:11434");
   expect(envs[2].ANTHROPIC_API_KEY).toBeUndefined();
 });
@@ -95,10 +95,10 @@ test("launch loads no MCP servers", async () => {
   expect(calls.at(-1)).toContain("--strict-mcp-config");
 });
 
-test("launch writes the ollama settings with no hooks", async () => {
+test("launch writes the ollama settings with only the compaction hook", async () => {
   const { written, run } = recorder(false);
   await launch(home, [], run, okApi);
-  expect(written[0].hooks).toBeUndefined();
+  expect(Object.keys(written[0].hooks)).toEqual(["PreCompact"]);
 });
 
 test("launch keeps user plugins and disables only built-in ones", async () => {
@@ -291,7 +291,7 @@ test("launch stops with a hint when the model does not fit in memory", async () 
     console.error = original;
   }
   expect(calls.map((call) => call[0])).toEqual(["curl", "ollama"]);
-  expect(errors[0]).toContain("qwen3.6-35b-64k-cc failed to load: model requires 22.0 GiB");
+  expect(errors[0]).toContain("qwen3.6-35b-128k-cc failed to load: model requires 22.0 GiB");
   expect(errors[1]).toContain("cl ollama");
 });
 
@@ -301,4 +301,17 @@ test("load failure hint names the sizes that fit, or says none does", () => {
   );
   expect(loadFailureHint(home, "35b", 64 * GIB, 0)).toContain("cl ollama 27b");
   expect(loadFailureHint(home, "9b", 8 * GIB, 0)).toContain("no configured size fits");
+});
+
+test("compaction asks the local model for a short summary without tool calls", async () => {
+  const { hooks } = await Bun.file(join(home, "config", "ollama.json")).json();
+  const [{ command }] = hooks.PreCompact[0].hooks;
+  const instructions = Bun.spawnSync(["sh", "-c", command]).stdout.toString();
+  expect(instructions).toContain("at most 600 words");
+  expect(instructions).toContain("call no tools");
+});
+
+test("ollama settings leave the compaction threshold to the context window", async () => {
+  const { env } = await Bun.file(join(home, "config", "ollama.json")).json();
+  expect(env.CLAUDE_AUTOCOMPACT_PCT_OVERRIDE).toBeUndefined();
 });

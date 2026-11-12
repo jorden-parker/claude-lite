@@ -10,10 +10,21 @@
   "feedbackDrafts": "off",
   "feedbackSurveyRate": 0,
   "bashOutputMaxChars": 6000,
+  "hooks": {
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo 'Keep this summary to at most 600 words. Skip the analysis section and write only the summary. Keep file paths, the requests from the user, errors and the next step; leave out code that is already saved in files. Reply with text only and call no tools.'"
+          }
+        ]
+      }
+    ]
+  },
   "env": {
     "ANTHROPIC_BASE_URL": "http://127.0.0.1:11434",
     "ANTHROPIC_AUTH_TOKEN": "ollama",
-    "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": "80",
     "CLAUDE_CODE_FILE_READ_MAX_OUTPUT_TOKENS": "4000",
     "MAX_MCP_OUTPUT_TOKENS": "2000",
     "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS": "1",

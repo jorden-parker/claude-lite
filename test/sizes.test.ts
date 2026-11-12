@@ -104,3 +104,9 @@ test("resolveSize ignores the local wired limit when OLLAMA_HOST names another m
 test("pickSize stays internal to the sizes module", async () => {
   expect(Object.keys(await import("../src/ollama/sizes.ts"))).not.toContain("pickSize");
 });
+
+test("every size gives Claude Code a 128k window so compaction starts near 110k tokens", () => {
+  for (const [name, size] of Object.entries(sizesWithoutOverlay)) {
+    expect((size as { context: number }).context, name).toBe(131072);
+  }
+});

@@ -2,7 +2,7 @@
   "27b": {
     "base": "qwen3.8:27b-dflash2-nvfp4",
     "model": "qwen3.8-27b-dflash-cc",
-    "context": 65536,
+    "context": 131072,
     "output_tokens": 8192,
     "thinking": false,
     "parameters": {
@@ -16,8 +16,8 @@
   },
   "35b": {
     "base": "qwen3.6:35b-mlx",
-    "model": "qwen3.6-35b-64k-cc",
-    "context": 65536,
+    "model": "qwen3.6-35b-128k-cc",
+    "context": 131072,
     "output_tokens": 8192,
     "thinking": false,
     "parameters": {
@@ -32,7 +32,7 @@
   "9b": {
     "base": "qwen3.5:9b-mtp-q4_K_M",
     "model": "qwen3.5-9b-mtp-cc",
-    "context": 65536,
+    "context": 131072,
     "output_tokens": 8192,
     "thinking": false,
     "memory_gb": 9.0,
