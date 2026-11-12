@@ -42,8 +42,8 @@ Ollama needs to load it (its own estimate at the size's context). The default si
 the machine (Ollama gets about 70% of RAM on Apple Silicon, or the `iogpu.wired_limit_mb` you set with `sudo sysctl` when it is positive), otherwise the largest size that fits: `9b` on 16 GB.
 When the load fails, for example because the model needs more memory, the launcher prints Ollama's reason and the
 sizes that do fit instead of starting `claude` against a model that cannot answer.
-It also loads no MCP servers (`--strict-mcp-config`) and turns off every plugin your `~/.claude/settings.json` enables:
-their tools, skills and SessionStart output made the first request about 93k tokens, past the model's context.
+It also loads no MCP servers (`--strict-mcp-config`) and turns off the built-in (`@builtin`) plugins your `~/.claude/settings.json` enables,
+so your other plugins keep their slash commands and skills. Plugins add tools, skills and SessionStart output to the first request; turn heavy ones off in `~/.claude/settings.json` if it outgrows the model's context.
 
 Each size sets thinking and effort. Later layers win:
 
@@ -83,7 +83,7 @@ Defaults to `27b` and 3 runs. Benches the size three times, once each for the ba
 | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | -------------------------------------------------------------------------------- |
 | `CLAUDE_LITE_EFFORT`   | Effort level for `cl ollama` (`low`, `medium` or `xhigh` on Qwen3.8; needs thinking on); `--effort` overrides it                                                              | Optional | The size's `effort`, else unset                                                  |
 | `CLAUDE_LITE_HOME`     | The claude-lite checkout that `config/` paths resolve against                                                                                                                 | Optional | The checkout containing the binary (`dist/..`), or the repo when run from source |
-| `CLAUDE_CONFIG_DIR`    | The Claude config directory whose `settings.json` lists the plugins `cl ollama` turns off                                                                                     | Optional | `~/.claude`                                                                      |
+| `CLAUDE_CONFIG_DIR`    | The Claude config directory whose `settings.json` lists the built-in plugins `cl ollama` turns off                                                                            | Optional | `~/.claude`                                                                      |
 | `CLAUDE_LITE_THINKING` | `on` or `off` sets thinking for `cl ollama`; `--think`/`--no-think` override it                                                                                               | Optional | The size's `thinking`                                                            |
 | `OLLAMA_HOST`          | Address of the Ollama server for `cl ollama` and `cl bench`: `host`, `host:port` or a URL; a remote host skips the local memory check and joins the sandbox's allowed domains | Optional | `127.0.0.1:11434`                                                                |
 | `HOME`                 | The user home for install targets, the Ollama logs and the bench history                                                                                                      | Optional | `os.homedir()`                                                                   |

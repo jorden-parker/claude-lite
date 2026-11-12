@@ -101,18 +101,18 @@ test("launch writes the ollama settings with no hooks", async () => {
   expect(written[0].hooks).toBeUndefined();
 });
 
-test("launch disables the plugins the user enabled", async () => {
+test("launch keeps user plugins and disables only built-in ones", async () => {
   const configDir = mkdtempSync(join(tmpdir(), "claude-config-"));
   writeFileSync(
     join(configDir, "settings.json"),
-    JSON.stringify({ enabledPlugins: { "a@m": true, "b@m": false } }),
+    JSON.stringify({ enabledPlugins: { "a@m": true, "b@m": false, "c@builtin": true } }),
   );
   const previous = process.env.CLAUDE_CONFIG_DIR;
   process.env.CLAUDE_CONFIG_DIR = configDir;
   try {
     const { written, run } = recorder(false);
     await launch(home, [], run, okApi);
-    expect(written[0].enabledPlugins).toEqual({ "a@m": false, "b@m": false });
+    expect(written[0].enabledPlugins).toEqual({ "c@builtin": false });
   } finally {
     if (previous === undefined) delete process.env.CLAUDE_CONFIG_DIR;
     else process.env.CLAUDE_CONFIG_DIR = previous;
