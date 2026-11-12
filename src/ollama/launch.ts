@@ -72,7 +72,7 @@ export function ollamaBaseSettings(home: string): Record<string, any> {
 export function renderLaunchSettings(home: string, size: Size, serverUrl?: string) {
   const rendered = {
     ...renderSettings(ollamaBaseSettings(home), size),
-    enabledPlugins: disabledBuiltinPlugins(),
+    enabledPlugins: disabledUserPlugins(),
   };
   return serverUrl ? withServerUrl(rendered, serverUrl) : rendered;
 }
@@ -87,15 +87,11 @@ function buildPlan(home: string, args: string[]) {
   return { name, size, settings, modelfile: renderModelfile(size), claudeArgs };
 }
 
-function disabledBuiltinPlugins(): Record<string, false> {
+function disabledUserPlugins(): Record<string, false> {
   const configDir = process.env.CLAUDE_CONFIG_DIR ?? join(homedir(), ".claude");
   try {
     const { enabledPlugins } = JSON.parse(readFileSync(join(configDir, "settings.json"), "utf8"));
-    return Object.fromEntries(
-      Object.keys(enabledPlugins ?? {})
-        .filter((name) => name.endsWith("@builtin"))
-        .map((name) => [name, false]),
-    );
+    return Object.fromEntries(Object.keys(enabledPlugins ?? {}).map((name) => [name, false]));
   } catch {
     return {};
   }
