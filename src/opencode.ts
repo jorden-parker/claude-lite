@@ -36,10 +36,9 @@ export async function runOpenCode(
   console.error(
     "claude-lite: opencode runs without claude-lite's permissions, sandbox and secret denies; configure ~/.config/opencode/opencode.json",
   );
-  const providerModel = `${PROVIDER}/${model}`;
   const config = {
     $schema: "https://opencode.ai/config.json",
-    model: providerModel,
+    model: `${PROVIDER}/${model}`,
     instructions: [join(liteHome(), "config", "opencode-instructions.md")],
     providers: {
       [PROVIDER]: {
@@ -50,9 +49,9 @@ export async function runOpenCode(
       },
     },
   };
-  const hasOwnModel = args.some((arg) => arg === "--model" || arg === "-m");
-  const modelArgs = hasOwnModel ? [] : ["--model", providerModel];
-  return await run(["opencode", ...args, ...modelArgs], {
+  const hasOwnServer = args.some((arg) => arg === "--server" || arg === "--standalone");
+  const serverArgs = hasOwnServer ? [] : ["--standalone"];
+  return await run(["opencode", ...serverArgs, ...args], {
     ...process.env,
     OPENCODE_CONFIG_CONTENT: JSON.stringify(config),
   });

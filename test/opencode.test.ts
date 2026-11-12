@@ -44,25 +44,17 @@ test("opencode gets an inline provider for the served model", async () => {
   });
 });
 
-test("the served model is passed with --model so no opencode config or last-used model wins", async () => {
-  const { calls, run } = fakeOpenCode("2.1.2");
+test("opencode gets a private server so a background service started for another model is not reused", async () => {
+  const { calls, run } = fakeOpenCode("2.2.7");
   expect(await runOpenCode(OPTIONS, run)).toBe(0);
-  expect(calls.at(-1)).toEqual([
-    "opencode",
-    "run",
-    "hi",
-    "--model",
-    "claude-lite/qwen3.8-27b-dflash-cc",
-  ]);
+  expect(calls.at(-1)).toEqual(["opencode", "--standalone", "run", "hi"]);
 });
 
-test("a --model or -m the user passes is left alone", async () => {
-  for (const flag of ["--model", "-m"]) {
-    const { calls, run } = fakeOpenCode("2.1.2");
-    const args = ["run", flag, "other/model", "hi"];
-    expect(await runOpenCode({ ...OPTIONS, args }, run)).toBe(0);
-    expect(calls.at(-1)).toEqual(["opencode", ...args]);
-  }
+test("a --server the user passes is left alone", async () => {
+  const { calls, run } = fakeOpenCode("2.2.7");
+  const args = ["--server", "http://127.0.0.1:4096", "run", "hi"];
+  expect(await runOpenCode({ ...OPTIONS, args }, run)).toBe(0);
+  expect(calls.at(-1)).toEqual(["opencode", ...args]);
 });
 
 test("opencode is told to browse with agent-browser", () => {

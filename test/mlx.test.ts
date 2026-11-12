@@ -157,11 +157,7 @@ test("mlx --qwen runs qwen against the oMLX /v1 endpoint with the served id", as
 test("mlx --opencode runs opencode on the oMLX /v1 endpoint with the served id", async () => {
   const { calls, envs, dependencies } = harness();
   expect(await launchMlx(home, ["35b", "--opencode"], dependencies)).toBe(0);
-  expect(calls.at(-1)).toEqual([
-    "opencode",
-    "--model",
-    "claude-lite/mlx-community--Qwen3.6-35B-A3B-4bit",
-  ]);
+  expect(calls.at(-1)).toEqual(["opencode", "--standalone"]);
   const config = JSON.parse(envs.at(-1).OPENCODE_CONFIG_CONTENT);
   expect(config.model).toBe(`claude-lite/${SERVED_35B}`);
   expect(config.providers["claude-lite"].settings.baseURL).toBe(`${mlxUrl()}/v1`);

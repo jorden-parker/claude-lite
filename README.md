@@ -74,6 +74,8 @@ Qwen Code runs without claude-lite's permissions, sandbox, secret denies and sys
 
 `--opencode` (on `ollama` and `mlx`) runs `opencode` after the same server and model setup. It sets `OPENCODE_CONFIG_CONTENT` to an inline config with a `claude-lite` OpenAI-compatible provider at `<server>/v1` and `model` set to `claude-lite/<model>`; that config overrides your global and project `opencode.json` for those keys only. Arguments after the flags pass to `opencode` (for example `cl ollama 27b --opencode run "hi"`). Install it with `npm i -g opencode-ai`.
 
+It also passes `--standalone`, so OpenCode starts a private server that reads this config. Without it OpenCode 2 connects to its shared background service, which keeps the config, and so the model, of whichever launch started it. Passing your own `--server` or `--standalone` skips this.
+
 It needs OpenCode 2.0 or newer and exits 1 otherwise: older versions ignore the `providers` key, and OpenCode falls back to the newest model it can reach, which can be a cloud model.
 
 The config also adds `config/opencode-instructions.md` to `instructions`, which tells OpenCode to browse with [agent-browser](https://agent-browser.dev/) (`brew install agent-browser`) instead of its web fetch tool.
