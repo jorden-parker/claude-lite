@@ -12,7 +12,7 @@ TypeScript + Bun: Ollama launcher, bench, server checks and installer. See READM
 
 ## Architecture
 
-- `src/cli.ts`: entry point and subcommand dispatch (`install`, `update`, `build`, `uninstall`, `doctor`, `logs`, `servers`, `fix-servers`, `config`, `ollama`, `mlx`, `bench`)
+- `src/cli.ts`: entry point and subcommand dispatch (`install`, `update`, `build`, `uninstall`, `doctor`, `logs`, `servers`, `stop`, `fix-servers`, `config`, `ollama`, `mlx`, `bench`)
 - `src/install.ts`: lifecycle commands, shell completion blocks, the `cl` link, Ollama server checks and the server env login agent
 - `src/help.ts`: `COMMAND_HELP`/`USAGE`; `src/completion.ts`: shell completion; `src/home.ts`: `liteHome()` (`CLAUDE_LITE_HOME` or the checkout)
 - `src/config-screen.ts`: `cl config`; pure `renderConfig`/`pressKey` over a `ConfigState`, plus `loadConfigState`/`saveConfigState` and the raw-terminal loop `runConfigScreen`. Writes `local-ollama.json` (`sandbox.enabled`, `permissions.defaultMode`) and `local-sizes.json` (`default`, `thinking`, `effort`, `output_tokens`); the system prompt row opens `system-prompt.md` in `$VISUAL`/`$EDITOR`; a size with `"default": true` wins in `defaultSize`
@@ -24,7 +24,7 @@ TypeScript + Bun: Ollama launcher, bench, server checks and installer. See READM
 
 ## Gotchas
 
-- `install`, `uninstall`, `update`, `build`, `doctor`, `logs`, `servers`, `fix-servers` and `config` share the signature `(userHome, home, run?) => Promise<number>` and dispatch through `LIFECYCLE` in `cli.ts`. A new lifecycle command goes in `src/install.ts` and that map.
+- `install`, `uninstall`, `update`, `build`, `doctor`, `logs`, `servers`, `stop`, `fix-servers` and `config` share the signature `(userHome, home, run?) => Promise<number>` and dispatch through `LIFECYCLE` in `cli.ts`. A new lifecycle command goes in `src/install.ts` and that map.
 - `COMMAND_HELP` in `src/help.ts` is the only command list. `USAGE`, shell completion and the `LIFECYCLE` typing derive from it, so a new subcommand needs an entry there and `bun run typecheck` fails if `LIFECYCLE` disagrees.
 - `install` writes only the completion blocks (zsh `.zshrc`, bash `.bashrc`, plus the completion files for each shell whose rc exists) and owns the `~/.local/bin/cl` symlink to `dist/claude-lite`; `uninstall` removes the blocks, completion files and link (the link only when it points at this checkout), the server env login agent `cl servers` writes, and also strips legacy claude-lite blocks from `~/.claude/CLAUDE.md` and the rc files. `update` is pull, build, then the fresh binary's `install`.
 - Commits go through husky, lint-staged and commitlint, so use conventional commit messages.

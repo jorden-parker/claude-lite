@@ -16,7 +16,8 @@ export function mlxUrl(env: Record<string, string | undefined> = process.env): s
 }
 
 const mlxPort = () => new URL(mlxUrl()).port;
-const STOP_HINT = "pkill -f 'vllm-mlx.* serve'";
+export const MLX_SERVER_PATTERN = "vllm-mlx.* serve";
+const STOP_HINT = "cl stop";
 const VLLM_MLX = "vllm-mlx@0.6.0";
 const PYTHON = "3.12";
 const QWEN_TOOL_PARSER = "qwen3_xml";

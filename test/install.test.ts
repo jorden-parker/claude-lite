@@ -22,6 +22,7 @@ import {
   ollamaLogPaths,
   ollamaStartupSources,
   servers,
+  stop,
   uninstall,
   update,
   build,
@@ -546,4 +547,21 @@ test("uninstall removes completion files but leaves foreign ones", async () => {
   expect(existsSync(completionFiles(user).zsh)).toBe(false);
   expect(existsSync(completionFiles(user).bash)).toBe(false);
   expect(readFileSync(completionFiles(user).fish, "utf8")).toBe("mine\n");
+});
+
+test("stop kills the vllm-mlx server and every Ollama process", async () => {
+  const commands: string[][] = [];
+  const run: Runner = async (argv) => {
+    commands.push(argv);
+    return 0;
+  };
+  expect(await stop("/user", "/lite", run)).toBe(0);
+  expect(commands).toEqual([
+    ["pkill", "-f", "vllm-mlx.* serve"],
+    ["pkill", "-ix", "ollama"],
+  ]);
+});
+
+test("stop succeeds when nothing was running", async () => {
+  expect(await stop("/user", "/lite", async () => 1)).toBe(0);
 });

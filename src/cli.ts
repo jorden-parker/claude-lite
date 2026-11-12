@@ -11,6 +11,7 @@ import {
   install,
   logs,
   servers,
+  stop,
   uninstall,
   update,
 } from "./install.ts";
@@ -29,6 +30,7 @@ const LIFECYCLE: Record<
   doctor,
   logs,
   servers,
+  stop,
   config,
   "fix-servers": fixServers,
 };

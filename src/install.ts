@@ -14,7 +14,7 @@ import {
 } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { completionPath, completionScript, END, type Shell, START } from "./completion.ts";
-import { mlxLogPath, readMlxLogHealth } from "./mlx.ts";
+import { MLX_SERVER_PATTERN, mlxLogPath, readMlxLogHealth } from "./mlx.ts";
 import {
   loadConfigState,
   renderConfig,
@@ -392,6 +392,20 @@ export async function fixServers(
   for (const plist of needSudo) console.log(`FAIL needs sudo: ${plist}`);
   await run(["open", "-a", "Ollama"]);
   return needSudo.length ? 1 : 0;
+}
+
+export async function stop(
+  _userHome: string,
+  _home: string,
+  run: Runner = spawnRunner,
+): Promise<number> {
+  const targets: [string, string[]][] = [
+    ["vllm-mlx", ["pkill", "-f", MLX_SERVER_PATTERN]],
+    ["Ollama", ["pkill", "-ix", "ollama"]],
+  ];
+  for (const [label, command] of targets)
+    console.log((await run(command)) === 0 ? `stopped ${label}` : `${label} was not running`);
+  return 0;
 }
 
 function securityPosture(home: string): string[] {
