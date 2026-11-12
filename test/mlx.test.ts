@@ -117,7 +117,7 @@ test("mlx skips claude when the server exits before it is ready", async () => {
   expect(events.at(-1)).toBe("stop");
 });
 
-test("mlx passes thinking off and only cache-safe sampling as server defaults", async () => {
+test("mlx passes thinking off and the size's sampling as server defaults", async () => {
   const { serverCommands, dependencies } = harness();
   await launchMlx(home, ["35b"], dependencies);
   const server = serverCommands[0];
@@ -126,7 +126,9 @@ test("mlx passes thinking off and only cache-safe sampling as server defaults", 
     '{"enable_thinking":false,"preserve_thinking":true}',
   );
   expect(valueOf("--default-temperature")).toBe("0.7");
+  expect(valueOf("--default-top-k")).toBe("20");
   expect(valueOf("--default-top-p")).toBe("0.8");
+  expect(valueOf("--default-min-p")).toBe("0");
 });
 
 test("mlx --think leaves thinking to the model", async () => {
@@ -138,13 +140,12 @@ test("mlx --think leaves thinking to the model", async () => {
   );
 });
 
-test("mlx caps the prefix trie cache by entries and memory", async () => {
+test("mlx serves through the batched engine with a memory-capped prefix cache", async () => {
   const { serverCommands, dependencies } = harness();
   await launchMlx(home, ["35b"], dependencies);
   const server = serverCommands[0];
-  const valueOf = (flag: string) => server[server.indexOf(flag) + 1];
-  expect(valueOf("--prefix-trie-cache-size")).toBe("4");
-  expect(valueOf("--prefix-trie-cache-memory-mb")).toBe("8192");
+  expect(server).toContain("--continuous-batching");
+  expect(server[server.indexOf("--cache-memory-mb") + 1]).toBe("8192");
 });
 
 test("mlx prefills in 4096-token steps", async () => {
@@ -152,19 +153,18 @@ test("mlx prefills in 4096-token steps", async () => {
   await launchMlx(home, ["35b"], dependencies);
   const server = serverCommands[0];
   expect(server[server.indexOf("--prefill-step-size") + 1]).toBe("4096");
+  expect(server[server.indexOf("--mllm-prefill-step-size") + 1]).toBe("4096");
 });
 
-test("mlx leaves out the flags that turn off vllm-mlx prompt caching", async () => {
+test("mlx leaves out the flags that keep the prompt cache from working", async () => {
   const { serverCommands, dependencies } = harness();
   await launchMlx(home, ["35b"], dependencies);
   for (const flag of [
     "--enable-mtp",
     "--specprefill",
     "--max-kv-size",
-    "--default-top-k",
-    "--default-min-p",
-    "--default-presence-penalty",
-    "--default-repetition-penalty",
+    "--prefix-trie-cache",
+    "--disable-prefix-cache",
   ])
     expect(serverCommands[0]).not.toContain(flag);
 });
