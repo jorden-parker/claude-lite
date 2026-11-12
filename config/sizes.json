@@ -11,7 +11,8 @@
       "top_p": 0.8,
       "min_p": 0
     },
-    "memory_gb": 16.9
+    "memory_gb": 16.9,
+    "mlx": "mlx-community/Qwen3.8-27B-4bit"
   },
   "35b": {
     "base": "qwen3.6:35b-mlx",
@@ -25,7 +26,8 @@
       "top_p": 0.8,
       "min_p": 0
     },
-    "memory_gb": 22.0
+    "memory_gb": 22.0,
+    "mlx": "mlx-community/Qwen3.6-35B-A3B-4bit"
   },
   "9b": {
     "base": "qwen3.5:9b-mtp-q4_K_M",
@@ -39,6 +41,7 @@
       "top_k": 20,
       "top_p": 0.8,
       "min_p": 0
-    }
+    },
+    "mlx": "mlx-community/Qwen3.5-9B-4bit"
   }
 }

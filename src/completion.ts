@@ -72,7 +72,7 @@ export function nextWords(typed: string[], { commands, sizes }: CompletionWords)
   const [command, ...rest] = typed;
   if (command === undefined) return [...commands, "help"];
   if (command === "help") return rest.length === 0 ? commands : [];
-  if (command === "ollama") return ollamaNext(rest, sizes);
+  if (command === "ollama" || command === "mlx") return ollamaNext(rest, sizes);
   if (command === "bench") return benchNext(rest, sizes);
   if (!commands.includes(command) || rest.length > 0) return [];
   return ["--help"];

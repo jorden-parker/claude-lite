@@ -33,6 +33,10 @@ describe("nextWords", () => {
   test("ollama offers sizes and help first", () => {
     expect(complete("ollama")).toEqual([...words.sizes, "--help"]);
   });
+  test("mlx offers sizes first, then the same flags as ollama", () => {
+    expect(complete("mlx")).toEqual([...words.sizes, "--help"]);
+    expect(complete("mlx", "27b")).toEqual(["--print-config", ...ollamaFlags]);
+  });
   test("ollama offers flags after a size", () => {
     expect(complete("ollama", "27b")).toEqual(["--print-config", ...ollamaFlags]);
   });

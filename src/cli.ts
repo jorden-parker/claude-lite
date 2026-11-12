@@ -14,11 +14,12 @@ import {
   uninstall,
   update,
 } from "./install.ts";
+import { launchMlx } from "./mlx.ts";
 import { bench } from "./ollama/bench.ts";
 import { launch } from "./ollama/launch.ts";
 
 const LIFECYCLE: Record<
-  Exclude<keyof typeof COMMAND_HELP, "ollama" | "bench">,
+  Exclude<keyof typeof COMMAND_HELP, "ollama" | "mlx" | "bench">,
   (userHome: string, home: string) => Promise<number>
 > = {
   install,
@@ -59,8 +60,9 @@ function printHelp(topic: string | undefined) {
 
 type ArgumentCommand = (home: string, commandArgs: string[]) => Promise<number>;
 
-const ARGUMENT_COMMANDS: Record<"ollama" | "bench", ArgumentCommand> = {
+const ARGUMENT_COMMANDS: Record<"ollama" | "mlx" | "bench", ArgumentCommand> = {
   ollama: launch,
+  mlx: (home, commandArgs) => launchMlx(home, commandArgs),
   bench,
 };
 

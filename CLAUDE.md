@@ -12,14 +12,15 @@ TypeScript + Bun: Ollama launcher, bench, server checks and installer. See READM
 
 ## Architecture
 
-- `src/cli.ts`: entry point and subcommand dispatch (`install`, `update`, `build`, `uninstall`, `doctor`, `logs`, `servers`, `fix-servers`, `config`, `ollama`, `bench`)
+- `src/cli.ts`: entry point and subcommand dispatch (`install`, `update`, `build`, `uninstall`, `doctor`, `logs`, `servers`, `fix-servers`, `config`, `ollama`, `mlx`, `bench`)
 - `src/install.ts`: lifecycle commands, shell completion blocks, the `cl` link, Ollama server checks and the server env login agent
 - `src/help.ts`: `COMMAND_HELP`/`USAGE`; `src/completion.ts`: shell completion; `src/home.ts`: `liteHome()` (`CLAUDE_LITE_HOME` or the checkout)
 - `src/config-screen.ts`: `cl config`; pure `renderConfig`/`pressKey` over a `ConfigState`, plus `loadConfigState`/`saveConfigState` and the raw-terminal loop `runConfigScreen`. Writes `local-ollama.json` (`sandbox.enabled`, `permissions.defaultMode`) and `local-sizes.json` (`default`, `thinking`, `effort`, `output_tokens`); the system prompt row opens `system-prompt.md` in `$VISUAL`/`$EDITOR`; a size with `"default": true` wins in `defaultSize`
+- `src/mlx.ts`: `cl mlx`; serves a size's `mlx` model with `uvx vllm-mlx` on port 11435 after unloading Ollama models (`unloadModels` in `api.ts`), then reuses `launchSettings`/`runClaude` from `launch.ts`. `startServer`, `run` and `unload` are injected so tests start nothing
 - `src/json-overlay.ts`: `mergeSettings`/`withJsonOverlay`, the deep merge used for every gitignored `local-*.json`
 - `src/sandbox-secrets.ts`: merges `config/sandbox-secrets.json` into the sandbox settings
 - `src/ollama/`: Modelfile and settings rendering, size table, launcher, bench. `launch.ts` owns `ollamaBaseSettings` (ollama.json + local-ollama.json + shared secrets), the server status checks and `launch`; `settings.ts` `renderSettings` turns the base into the per-size settings; `size-overrides.ts` layers env (`applyEnv`) and flags (`applyFlags`) over a size; `sizes.ts` resolves the size (`resolveSize`) and picks the memory-aware default (`defaultSize`, from each size's `memory_gb`); `api.ts` is the only fetch client for Ollama (`load`, `chat`, `parameters`) and is injected into `launch` and `bench` so tests never touch a server; `bench.ts` holds the quality tasks and their pure `check` functions; `git-log-guard.ts` is the unbounded `git log` rule the bench's deny-recovery task scores against; `bench-history.ts` saves and compares runs
-- `config/`: `sizes.json` defines model sizes (base, model, context, output_tokens, thinking, optional effort, parameters, memory_gb; no sandbox or permissions), `local-sizes.json` (gitignored) overlays it, `system-prompt.md` is injected on launch, `ollama.json` is the base for `ollama` (it denies `Agent`), `local-ollama.json` (gitignored) overlays it, `sandbox-secrets.json` lists the secret paths and env vars the launcher denies
+- `config/`: `sizes.json` defines model sizes (base, model, context, output_tokens, thinking, optional effort, parameters, memory_gb, optional mlx Hugging Face id for `cl mlx`; no sandbox or permissions), `local-sizes.json` (gitignored) overlays it, `system-prompt.md` is injected on launch, `ollama.json` is the base for `ollama` (it denies `Agent`), `local-ollama.json` (gitignored) overlays it, `sandbox-secrets.json` lists the secret paths and env vars the launcher denies
 
 ## Gotchas
 
