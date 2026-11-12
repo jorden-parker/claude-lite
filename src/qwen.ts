@@ -12,6 +12,9 @@ export async function runQwen(
     OPENAI_BASE_URL: `${url}/v1`,
     OPENAI_API_KEY: "claude-lite",
     OPENAI_MODEL: model,
+    NODE_OPTIONS: [process.env.NODE_OPTIONS, "--disable-warning=MaxListenersExceededWarning"]
+      .filter(Boolean)
+      .join(" "),
   };
   return await run(["qwen", "--model", model, ...args], env);
 }
