@@ -275,6 +275,15 @@ test("logs tails the ollama logs that exist", async () => {
   expect(code).toBe(7);
 });
 
+test("logs also tails the mlx server log when it exists", async () => {
+  const { user, system } = ollamaRoots();
+  const mlxLog = join(user, ".cache/claude-lite/mlx-server.log");
+  touch(mlxLog);
+  const { seen, run } = recordingRunner();
+  expect(await logs(user, "/lite", run, system)).toBe(0);
+  expect(seen).toEqual([["tail", "-F", "-n", "20", mlxLog]]);
+});
+
 test("logs fails without tailing when no ollama log exists", async () => {
   const { user, system } = ollamaRoots();
   const { seen, run } = recordingRunner();

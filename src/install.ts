@@ -14,6 +14,7 @@ import {
 } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { completionPath, completionScript, END, type Shell, START } from "./completion.ts";
+import { mlxLogPath } from "./mlx.ts";
 import {
   loadConfigState,
   renderConfig,
@@ -204,9 +205,9 @@ export async function logs(
   run: Runner = spawnRunner,
   systemRoot = "/",
 ): Promise<number> {
-  const paths = ollamaLogPaths(userHome, systemRoot);
+  const paths = [...ollamaLogPaths(userHome, systemRoot), mlxLogPath(userHome)].filter(existsSync);
   if (paths.length === 0) {
-    console.error("claude-lite: no Ollama log file found");
+    console.error("claude-lite: no Ollama or mlx log file found");
     return 1;
   }
   return await run(["tail", "-F", "-n", "20", ...paths]);

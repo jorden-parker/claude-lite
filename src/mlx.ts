@@ -65,7 +65,9 @@ const DEFAULTS: MlxDependencies = {
   pollDelayMs: 1000,
 };
 
-const logPath = () => join(homedir(), ".cache", "claude-lite", "mlx-server.log");
+export const mlxLogPath = (userHome: string) =>
+  join(userHome, ".cache", "claude-lite", "mlx-server.log");
+const logPath = () => mlxLogPath(homedir());
 
 function samplingFlags(parameters: Record<string, number> = {}): string[] {
   return Object.entries(parameters)

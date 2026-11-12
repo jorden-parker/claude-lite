@@ -12,7 +12,7 @@ export const COMMAND_HELP = {
     "usage: claude-lite uninstall\n  removes what install added and the server env login agent that cl servers writes",
   doctor:
     "usage: claude-lite doctor\n  checks the build, shell completion, the cl link, config files, that Ollama responds with one startup source and the server env, and prints the Ollama sandbox and permission mode",
-  logs: "usage: claude-lite logs\n  follows the Ollama logs named in its launchd plists and Ollama.app",
+  logs: "usage: claude-lite logs\n  follows the Ollama logs named in its launchd plists and Ollama.app, plus the cl mlx server log",
   servers:
     "usage: claude-lite servers\n  lists Ollama startup sources and the port 11434 listener, and sets the server env (keep-alive, flash attention, q8 KV cache, one loaded model) with launchctl setenv; fails when more than one source would start a server or the server does not respond",
   config:
