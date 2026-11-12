@@ -6,6 +6,8 @@ import { renderLaunchSettings, type Runner, runClaude, spawnRunner } from "./oll
 import { resolveSize, type Size } from "./ollama/sizes.ts";
 
 export const MLX_URL = "http://127.0.0.1:11435";
+const MLX_PORT = new URL(MLX_URL).port;
+const STOP_HINT = "pkill -f 'vllm-mlx.* serve'";
 const VLLM_MLX = "vllm-mlx@0.6.0";
 const PYTHON = "3.12";
 const QWEN_TOOL_PARSER = "qwen3_xml";
@@ -18,6 +20,7 @@ type MlxDependencies = {
   run: Runner;
   startServer: (argv: string[], logPath: string) => MlxServer;
   unload: () => Promise<string[]>;
+  servedModels: () => Promise<string[] | null>;
   pollDelayMs: number;
 };
 
@@ -31,10 +34,26 @@ function spawnServer(argv: string[], logPath: string): MlxServer {
   return { exited: server.exited, stop: () => server.kill() };
 }
 
+async function fetchServedModels(): Promise<string[] | null> {
+  let response: Response;
+  try {
+    response = await fetch(`${MLX_URL}/v1/models`, { signal: AbortSignal.timeout(2000) });
+  } catch {
+    return null;
+  }
+  try {
+    const listing = (await response.json()) as { data?: { id: string }[] };
+    return (listing.data ?? []).map((model) => model.id);
+  } catch {
+    return [];
+  }
+}
+
 const DEFAULTS: MlxDependencies = {
   run: spawnRunner,
   startServer: spawnServer,
   unload: unloadModels,
+  servedModels: fetchServedModels,
   pollDelayMs: 1000,
 };
 
@@ -57,7 +76,7 @@ function serverCommand(size: Size, model: string): string[] {
     "--host",
     "127.0.0.1",
     "--port",
-    new URL(MLX_URL).port,
+    MLX_PORT,
     "--enable-auto-tool-choice",
     "--tool-call-parser",
     QWEN_TOOL_PARSER,
@@ -71,10 +90,11 @@ function serverCommand(size: Size, model: string): string[] {
   ];
 }
 
-const isServing = async (run: Runner) =>
-  (await run(["curl", "-sf", "-o", "/dev/null", "--max-time", "2", `${MLX_URL}/v1/models`])) === 0;
-
-async function waitUntilReady(server: MlxServer, run: Runner, pollDelayMs: number) {
+async function waitUntilReady(
+  server: MlxServer,
+  servedModels: MlxDependencies["servedModels"],
+  pollDelayMs: number,
+) {
   let hasExited = false;
   void server.exited.then(() => {
     hasExited = true;
@@ -82,7 +102,7 @@ async function waitUntilReady(server: MlxServer, run: Runner, pollDelayMs: numbe
   for (;;) {
     await Bun.sleep(pollDelayMs);
     if (hasExited) return false;
-    if (await isServing(run)) return true;
+    if ((await servedModels()) !== null) return true;
   }
 }
 
@@ -91,7 +111,7 @@ export async function launchMlx(
   args: string[],
   overrides: Partial<MlxDependencies> = {},
 ): Promise<number> {
-  const { run, startServer, unload, pollDelayMs } = { ...DEFAULTS, ...overrides };
+  const { run, startServer, unload, servedModels, pollDelayMs } = { ...DEFAULTS, ...overrides };
   const isPrintOnly = args.includes("--print-config");
   const { name, size, claudeArgs } = resolveSize(
     home,
@@ -109,8 +129,19 @@ export async function launchMlx(
     console.log(JSON.stringify(settings, null, 2));
     return 0;
   }
-  if (await isServing(run)) {
-    console.error(`something already serves on ${MLX_URL}; stop it (pkill -f vllm-mlx) and retry`);
+  const alreadyServed = await servedModels();
+  if (alreadyServed?.includes(model)) {
+    console.log(
+      `reusing the vllm-mlx already serving ${model} on ${MLX_URL}; it keeps running after claude exits (stop it: ${STOP_HINT})`,
+    );
+    await unloadOllama(unload);
+    return await runClaudeIn(home, model, settings, claudeArgs, run);
+  }
+  if (alreadyServed !== null) {
+    console.error(
+      `${MLX_URL} already serves ${alreadyServed.join(", ") || "something that is not vllm-mlx"}, not ${model}; free port ${MLX_PORT} (stop a leftover vllm-mlx: ${STOP_HINT})`,
+    );
+    await run(["lsof", "-nP", `-iTCP:${MLX_PORT}`, "-sTCP:LISTEN"]);
     return 1;
   }
   if (
@@ -126,21 +157,37 @@ export async function launchMlx(
     ])) !== 0
   )
     return 1;
-  if (!isRemoteHost()) {
-    const unloaded = await unload();
-    if (unloaded.length) console.log(`unloaded Ollama models: ${unloaded.join(", ")}`);
-  }
+  await unloadOllama(unload);
   console.log(`starting vllm-mlx for ${model}; log: ${logPath()}`);
   const server = startServer(command, logPath());
-  const dir = mkdtempSync(join(tmpdir(), "claude-lite-mlx-"));
   try {
-    if (!(await waitUntilReady(server, run, pollDelayMs))) {
+    if (!(await waitUntilReady(server, servedModels, pollDelayMs))) {
       console.error(`vllm-mlx exited before it was ready; see ${logPath()}`);
       return 1;
     }
-    return await runClaude({ dir, home, model, settings, claudeArgs, url: MLX_URL }, run);
+    return await runClaudeIn(home, model, settings, claudeArgs, run);
   } finally {
     server.stop();
+  }
+}
+
+async function unloadOllama(unload: MlxDependencies["unload"]) {
+  if (isRemoteHost()) return;
+  const unloaded = await unload();
+  if (unloaded.length) console.log(`unloaded Ollama models: ${unloaded.join(", ")}`);
+}
+
+async function runClaudeIn(
+  home: string,
+  model: string,
+  settings: Record<string, any>,
+  claudeArgs: string[],
+  run: Runner,
+) {
+  const dir = mkdtempSync(join(tmpdir(), "claude-lite-mlx-"));
+  try {
+    return await runClaude({ dir, home, model, settings, claudeArgs, url: MLX_URL }, run);
+  } finally {
     rmSync(dir, { recursive: true, force: true });
   }
 }

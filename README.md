@@ -68,7 +68,7 @@ Sandbox and permission mode come from `config/ollama.json`, with gitignored `con
 
 Runs the size's `mlx` model (an `mlx-community` 4-bit build named in `config/sizes.json`) through [vllm-mlx](https://github.com/waybarrios/vllm-mlx), which serves the Anthropic Messages API that `claude` needs, instead of Ollama. Needs [uv](https://docs.astral.sh/uv/); nothing is installed into the repo.
 
-1. Fails if something already serves on `127.0.0.1:11435` (a leftover server: `pkill -f vllm-mlx`).
+1. Checks `127.0.0.1:11435/v1/models`. A vllm-mlx already serving the size's model (for example one left by an interrupted run) is reused and keeps running after `claude` exits; stop it with `pkill -f 'vllm-mlx.* serve'`. Anything else on the port stops the launch, and `lsof` names the process.
 2. Downloads the model with `uvx --from huggingface_hub hf download` (cached in `~/.cache/huggingface`; shows progress the first time).
 3. Unloads every model loaded in a local Ollama (`/api/ps`, then `keep_alive: 0`) so they don't share memory with MLX; Ollama being down or idle is fine.
 4. Starts `uvx vllm-mlx@0.6.0 serve` in the background with the Qwen tool and reasoning parsers, the size's sampling as server defaults and thinking off unless the size or `--think` turns it on. Its log is `~/.cache/claude-lite/mlx-server.log`.

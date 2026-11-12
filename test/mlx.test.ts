@@ -8,22 +8,29 @@ import type { Runner } from "../src/ollama/launch.ts";
 const home = join(import.meta.dir, "..");
 const settingsPathOf = (argv: string[]) => argv[argv.indexOf("--settings") + 1];
 
-type HarnessOptions = { isPortBusy?: boolean; doesServerDie?: boolean };
+const MODEL_35B = "mlx-community/Qwen3.6-35B-A3B-4bit";
 
-function harness({ isPortBusy = false, doesServerDie = false }: HarnessOptions = {}) {
+type HarnessOptions = { servedReplies?: (string[] | null)[]; doesServerDie?: boolean };
+
+function harness({
+  servedReplies = [null, [MODEL_35B]],
+  doesServerDie = false,
+}: HarnessOptions = {}) {
   const events: string[] = [];
   const calls: string[][] = [];
   const envs: any[] = [];
   const written: any[] = [];
   const serverCommands: string[][] = [];
-  let curlCount = 0;
+  let probeCount = 0;
+  const servedModels = async () => {
+    events.push("probe");
+    return servedReplies[Math.min(probeCount++, servedReplies.length - 1)];
+  };
   const run: Runner = async (argv, env) => {
     calls.push(argv);
     envs.push(env);
-    if (argv[0] === "curl") {
-      events.push("curl");
-      curlCount++;
-      if (curlCount === 1) return isPortBusy ? 0 : 7;
+    if (argv[0] === "lsof") {
+      events.push("lsof");
       return 0;
     }
     if (argv[0] === "claude") {
@@ -52,16 +59,16 @@ function harness({ isPortBusy = false, doesServerDie = false }: HarnessOptions =
     envs,
     written,
     serverCommands,
-    dependencies: { run, startServer, unload, pollDelayMs: 0 },
+    dependencies: { run, startServer, unload, servedModels, pollDelayMs: 0 },
   };
 }
 
 test("mlx downloads, unloads ollama, serves, waits, runs claude, then stops the server", async () => {
   const { events, calls, envs, written, serverCommands, dependencies } = harness();
   expect(await launchMlx(home, ["35b", "-p", "hi"], dependencies)).toBe(0);
-  expect(events).toEqual(["curl", "download", "unload", "serve", "curl", "claude", "stop"]);
+  expect(events).toEqual(["probe", "download", "unload", "serve", "probe", "claude", "stop"]);
   const claude = calls.at(-1)!;
-  expect(claude[claude.indexOf("--model") + 1]).toBe("mlx-community/Qwen3.6-35B-A3B-4bit");
+  expect(claude[claude.indexOf("--model") + 1]).toBe(MODEL_35B);
   expect(claude.slice(-2)).toEqual(["-p", "hi"]);
   expect(envs.at(-1).ANTHROPIC_BASE_URL).toBe(MLX_URL);
   expect(envs.at(-1).ANTHROPIC_API_KEY).toBeUndefined();
@@ -72,14 +79,30 @@ test("mlx downloads, unloads ollama, serves, waits, runs claude, then stops the 
   expect(server[server.indexOf("--port") + 1]).toBe(new URL(MLX_URL).port);
 });
 
-test("mlx stops before serving when the port is already in use", async () => {
-  const { events, dependencies } = harness({ isPortBusy: true });
-  expect(await launchMlx(home, ["35b"], dependencies)).toBe(1);
-  expect(events).toEqual(["curl"]);
+test("mlx reuses a server already serving the size's model and leaves it running", async () => {
+  const { events, calls, dependencies } = harness({ servedReplies: [[MODEL_35B]] });
+  expect(await launchMlx(home, ["35b"], dependencies)).toBe(0);
+  expect(events).toEqual(["probe", "unload", "claude"]);
+  expect(calls.at(-1)![0]).toBe("claude");
+});
+
+test("mlx names what holds the port when it serves something else", async () => {
+  const { events, calls, dependencies } = harness({ servedReplies: [["other-model"]] });
+  const errors: string[] = [];
+  const original = console.error;
+  console.error = (line: string) => errors.push(line);
+  try {
+    expect(await launchMlx(home, ["35b"], dependencies)).toBe(1);
+  } finally {
+    console.error = original;
+  }
+  expect(events).toEqual(["probe", "lsof"]);
+  expect(calls[0]).toContain(`-iTCP:${new URL(MLX_URL).port}`);
+  expect(errors[0]).toContain("other-model");
 });
 
 test("mlx skips claude when the server exits before it is ready", async () => {
-  const { events, dependencies } = harness({ doesServerDie: true });
+  const { events, dependencies } = harness({ servedReplies: [null], doesServerDie: true });
   expect(await launchMlx(home, ["35b"], dependencies)).toBe(1);
   expect(events).not.toContain("claude");
   expect(events.at(-1)).toBe("stop");
