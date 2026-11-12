@@ -17,6 +17,7 @@ import { loadSizes, resolveSize } from "../src/ollama/sizes.ts";
 const home = join(import.meta.dir, "..");
 const settingsPathOf = (argv: string[]) => argv[argv.indexOf("--settings") + 1];
 
+const OPENCODE_VERSION_PROBE = 'opencode --version > "$1"';
 const MODEL_35B = "mlx-community/Qwen3.6-35B-A3B-4bit";
 const SERVED_35B = "mlx-community--Qwen3.6-35B-A3B-4bit";
 const DATA_DIR = omlxDataDir(homedir());
@@ -46,6 +47,10 @@ function harness({
   const run: Runner = async (argv, env) => {
     calls.push(argv);
     envs.push(env);
+    if (argv[2] === OPENCODE_VERSION_PROBE) {
+      writeFileSync(argv[4], "2.1.2\n");
+      return 0;
+    }
     if (argv[0] === "lsof") {
       events.push("lsof");
       return 0;

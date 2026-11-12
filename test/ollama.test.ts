@@ -27,6 +27,8 @@ const okApi: LauncherApi = {
 const failingApi = (message: string): LauncherApi => ({ ...okApi, load: async () => message });
 const GIB = 1024 ** 3;
 const settingsPathOf = (argv: string[]) => argv[argv.indexOf("--settings") + 1];
+const OPENCODE_VERSION_PROBE = 'opencode --version > "$1"';
+
 const recorder = (failShow: boolean, failCurl = false) => {
   const calls: string[][] = [];
   const envs: any[] = [];
@@ -35,6 +37,7 @@ const recorder = (failShow: boolean, failCurl = false) => {
     calls.push(argv);
     envs.push(env);
     if (argv[0] === "claude") written.push(JSON.parse(readFileSync(settingsPathOf(argv), "utf8")));
+    if (argv[2] === OPENCODE_VERSION_PROBE) writeFileSync(argv[4], "2.1.2\n");
     if (failCurl && argv[0] === "curl") return 7;
     return failShow && argv[1] === "show" ? 1 : 0;
   };
