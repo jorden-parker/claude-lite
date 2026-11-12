@@ -229,8 +229,8 @@ export function saveConfigState(home: string, state: ConfigState): void {
   writeJson(resolveConfigPath(home, "local-sizes.json"), state.sizesOverlay);
 }
 
-// eslint-disable-next-line no-control-regex
-const TERMINAL_KEY_PATTERN = /\x1b\[[A-D]|[\s\S]/g;
+const ESCAPE = String.fromCharCode(27);
+const TERMINAL_KEY_PATTERN = new RegExp(`${ESCAPE}\\[[A-D]|[\\s\\S]`, "g");
 
 export const splitKeys = (chunk: string) => chunk.match(TERMINAL_KEY_PATTERN) ?? [];
 

@@ -125,7 +125,7 @@ export async function launch(
   if (args.includes("--print-config")) {
     const { settings, modelfile } = buildPlan(
       home,
-      args.filter((a) => a !== "--print-config"),
+      args.filter((arg) => arg !== "--print-config"),
     );
     console.log(modelfile);
     console.log(JSON.stringify(settings, null, 2));

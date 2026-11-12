@@ -33,7 +33,6 @@
     "API_TIMEOUT_MS": "1800000"
   },
   "permissions": {
-    "additionalDirectories": ["/tmp/claude-skills", "/private/tmp/claude-skills"],
     "deny": [
       "Read(./dist/**)",
       "Read(**/.next/**)",
@@ -65,26 +64,12 @@
     ],
     "defaultMode": "default",
     "disableAutoMode": "disable",
-    "ask": ["Bash(git commit *)", "Bash(git push *)", "Bash(dangerouslyDisableSandbox:true)"],
-    "allow": [
-      "Skill(find-docs)",
-      "Bash(open /tmp/claude-skills/*)",
-      "Bash(open /private/tmp/claude-skills/*)"
-    ]
+    "ask": ["Bash(git commit *)", "Bash(git push *)", "Bash(dangerouslyDisableSandbox:true)"]
   },
   "sandbox": {
     "enabled": true,
     "autoAllowBashIfSandboxed": true,
-    "excludedCommands": [
-      "cmux *",
-      "gh *",
-      "short *",
-      "git push *",
-      "git commit *",
-      "pnpm *",
-      "open /tmp/claude-skills/*",
-      "open /private/tmp/claude-skills/*"
-    ],
+    "excludedCommands": ["cmux *", "gh *", "git push *", "git commit *", "pnpm *"],
     "network": {
       "allowedDomains": [
         "127.0.0.1",
@@ -102,7 +87,7 @@
       "allowLocalBinding": true
     },
     "filesystem": {
-      "allowWrite": ["~/.cache/claude-sandbox", "/tmp/claude-skills", "/private/tmp/claude-skills"],
+      "allowWrite": ["~/.cache/claude-sandbox"],
       "allowRead": ["~/.claude/skills"],
       "denyRead": ["~/.claude", "~/.qwen"]
     }

@@ -239,7 +239,7 @@ test("bench saves each run and --compare prints the change from the previous one
   expect(JSON.parse(printed[3]).comparison).toContain(`quality 2/${total} -> 2/${total}`);
 });
 
-test("deny-recovery passes only when the next call gets past bash-guard", () => {
+test("deny-recovery passes only when the next call gets past the unbounded git log rule", () => {
   const recovery = task("deny-recovery");
   expect(recovery.check(call("Bash", { command: "git log --oneline -n 20" }))).toBeNull();
   expect(recovery.check(call("Bash", { command: "git log" }))).toContain("unchanged");

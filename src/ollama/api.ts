@@ -1,4 +1,4 @@
-const DEFAULT_URL = "http://localhost:11434";
+const DEFAULT_URL = "http://127.0.0.1:11434";
 const LOCAL_HOSTS = ["localhost", "127.0.0.1", "0.0.0.0", "[::1]"];
 
 type Env = Record<string, string | undefined>;

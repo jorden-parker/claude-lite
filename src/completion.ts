@@ -4,7 +4,7 @@ import { FLAGS } from "./ollama/size-overrides.ts";
 import { loadSizes } from "./ollama/sizes.ts";
 
 export type Shell = "zsh" | "bash" | "fish";
-export type CompletionWords = { commands: string[]; sizes: string[] };
+type CompletionWords = { commands: string[]; sizes: string[] };
 
 export const START = "# >>> claude-lite >>>";
 export const END = "# <<< claude-lite <<<";
@@ -53,15 +53,20 @@ function sizeCommandNext(typed: string[], sizes: string[], extraFlag: string): s
 }
 
 const BENCH_FLAGS = new Set(["--think", "--no-think", "--effort"]);
+const BENCH_ONLY_FLAGS = ["--runs", "--compare"];
 
 const ollamaNext = (typed: string[], sizes: string[]) =>
   sizeCommandNext(typed, sizes, "--print-config");
 
-const benchNext = (typed: string[], sizes: string[]) =>
-  sizeCommandNext(typed, sizes, "--json").filter(
+function benchNext(typed: string[], sizes: string[]): string[] {
+  if (typed.at(-1) === "--runs") return [];
+  const words = sizeCommandNext(typed, sizes, "--json").filter(
     (word) =>
       !word.startsWith("--") || word === "--json" || word === "--help" || BENCH_FLAGS.has(word),
   );
+  if (typed.length === 0 || typed.includes("--help") || typed.at(-1) === "--effort") return words;
+  return [...words, ...BENCH_ONLY_FLAGS.filter((flag) => !typed.includes(flag))];
+}
 
 export function nextWords(typed: string[], { commands, sizes }: CompletionWords): string[] {
   const [command, ...rest] = typed;

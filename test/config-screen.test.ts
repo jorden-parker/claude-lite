@@ -201,7 +201,6 @@ test("saveConfigState writes the ollama overlays as formatted JSON", () => {
     '{\n  "sandbox": {\n    "enabled": false\n  }\n}\n',
   );
   expect(JSON.parse(readConfigFile("local-sizes.json"))).toEqual({ "9b": { default: true } });
-  expect(existsSync(join(home, "config", "local-claude.json"))).toBe(false);
 });
 
 test("cl config without a terminal prints the screen and writes nothing", async () => {

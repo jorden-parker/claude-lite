@@ -58,19 +58,19 @@ test("modelfile has base and parameters", () => {
 test("existing model skips pull and create", async () => {
   const { calls, envs, run } = recorder(false);
   expect(await launch(home, ["35b", "-p", "hi"], run, okApi)).toBe(0);
-  expect(calls.map((c) => c[1])).toEqual(["-sf", "show", "--settings"]);
+  expect(calls.map((call) => call[1])).toEqual(["-sf", "show", "--settings"]);
   const claude = calls[2];
   expect(claude[0]).toBe("claude");
   expect(claude.slice(-2)).toEqual(["-p", "hi"]);
   expect(claude[claude.indexOf("--model") + 1]).toBe("qwen3.6-35b-64k-cc");
-  expect(envs[2].ANTHROPIC_BASE_URL).toBe("http://localhost:11434");
+  expect(envs[2].ANTHROPIC_BASE_URL).toBe("http://127.0.0.1:11434");
   expect(envs[2].ANTHROPIC_API_KEY).toBeUndefined();
 });
 
 test("missing model pulls and creates", async () => {
   const { calls, run } = recorder(true);
   await launch(home, ["27b"], run, okApi);
-  expect(calls.map((c) => c[1])).toEqual(["-sf", "show", "pull", "create", "--settings"]);
+  expect(calls.map((call) => call[1])).toEqual(["-sf", "show", "pull", "create", "--settings"]);
   expect(calls[2][2]).toBe("qwen3.8:27b-dflash2-nvfp4");
 });
 
@@ -78,7 +78,7 @@ test("existing model with other parameters is recreated without a pull", async (
   const { calls, run } = recorder(false);
   const staleApi: LauncherApi = { ...okApi, parameters: async () => ({ num_ctx: 4096 }) };
   expect(await launch(home, ["27b"], run, staleApi)).toBe(0);
-  expect(calls.map((c) => c[1])).toEqual(["-sf", "show", "create", "--settings"]);
+  expect(calls.map((call) => call[1])).toEqual(["-sf", "show", "create", "--settings"]);
 });
 
 test("existing model with matching parameters is kept", async () => {
@@ -86,7 +86,7 @@ test("existing model with matching parameters is kept", async () => {
   const matching = modelParameters(loadSizes(home)["27b"]);
   const currentApi: LauncherApi = { ...okApi, parameters: async () => matching };
   expect(await launch(home, ["27b"], run, currentApi)).toBe(0);
-  expect(calls.map((c) => c[1])).toEqual(["-sf", "show", "--settings"]);
+  expect(calls.map((call) => call[1])).toEqual(["-sf", "show", "--settings"]);
 });
 
 test("launch loads no MCP servers", async () => {
@@ -122,7 +122,7 @@ test("launch disables the plugins the user enabled", async () => {
 test("launch stops when the ollama server does not respond", async () => {
   const { calls, run } = recorder(false, true);
   expect(await launch(home, [], run, okApi)).toBe(1);
-  expect(calls.map((c) => c[0])).toEqual(["curl"]);
+  expect(calls.map((call) => call[0])).toEqual(["curl"]);
 });
 
 test("settings deny only the project's own dist, not node_modules docs", async () => {
@@ -280,7 +280,7 @@ test("launch stops with a hint when the model does not fit in memory", async () 
   } finally {
     console.error = original;
   }
-  expect(calls.map((c) => c[0])).toEqual(["curl", "ollama"]);
+  expect(calls.map((call) => call[0])).toEqual(["curl", "ollama"]);
   expect(errors[0]).toContain("qwen3.6-35b-64k-cc failed to load: model requires 22.0 GiB");
   expect(errors[1]).toContain("cl ollama");
 });

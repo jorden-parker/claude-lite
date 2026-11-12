@@ -66,8 +66,8 @@ test("streamChat throws the server's error line", async () => {
   }
 });
 
-test("ollamaUrl defaults to localhost and normalizes OLLAMA_HOST", () => {
-  expect(ollamaUrl({})).toBe("http://localhost:11434");
+test("ollamaUrl defaults to 127.0.0.1 and normalizes OLLAMA_HOST", () => {
+  expect(ollamaUrl({})).toBe("http://127.0.0.1:11434");
   expect(ollamaUrl({ OLLAMA_HOST: "studio.local" })).toBe("http://studio.local:11434");
   expect(ollamaUrl({ OLLAMA_HOST: "studio.local:8080" })).toBe("http://studio.local:8080");
   expect(ollamaUrl({ OLLAMA_HOST: "https://ollama.example.com/" })).toBe(

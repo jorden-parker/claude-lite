@@ -56,6 +56,28 @@ test("install adds the completion block idempotently, uninstall restores", async
   expect(readRc(user, ".zshrc")).toBe("export A=1\n");
 });
 
+test("a second rc change on the same day keeps the first backup", async () => {
+  const user = fixture();
+  await install(user, "/lite");
+  writeFileSync(join(user, ".zshrc"), `${readRc(user, ".zshrc")}export B=2\n`);
+  await install(user, "/lite");
+  const backups = readdirSync(user)
+    .filter((name) => name.startsWith(".zshrc.bak-"))
+    .map((name) => readRc(user, name));
+  expect(backups).toContain("export A=1\n");
+});
+
+test("an rc change does not add a backup identical to an existing one", async () => {
+  const user = fixture();
+  await install(user, "/lite");
+  await uninstall(user, "/lite");
+  await install(user, "/lite");
+  const backups = readdirSync(user).filter((name) => name.startsWith(".zshrc.bak-"));
+  expect(backups.map((name) => readRc(user, name)).sort()).toEqual(
+    [...new Set(backups.map((name) => readRc(user, name)))].sort(),
+  );
+});
+
 test("install never touches ~/.claude/CLAUDE.md", async () => {
   const user = fixture();
   await install(user, "/lite");

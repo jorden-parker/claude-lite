@@ -1,6 +1,5 @@
 node_modules
 dist
 *.bun-build
-config/local-claude.json
 config/local-ollama.json
 config/local-sizes.json

@@ -92,11 +92,22 @@ function completionInstalled(userHome: string): boolean {
   return blocksWritten && filesWritten;
 }
 
+function backupPathUnlessDuplicate(path: string, currentText: string): string | null {
+  const stem = `${path}.bak-${new Date().toISOString().slice(0, 10)}`;
+  let candidate = stem;
+  for (let copyNumber = 1; existsSync(candidate); copyNumber++) {
+    if (readFileSync(candidate, "utf8") === currentText) return null;
+    candidate = `${stem}-${copyNumber}`;
+  }
+  return candidate;
+}
+
 function rewrite(path: string, update: (text: string) => string) {
   const before = existsSync(path) ? readFileSync(path, "utf8") : "";
   const after = update(before);
   if (after === before) return;
-  if (existsSync(path)) copyFileSync(path, `${path}.bak-${new Date().toISOString().slice(0, 10)}`);
+  const backupPath = existsSync(path) ? backupPathUnlessDuplicate(path, before) : null;
+  if (backupPath) copyFileSync(path, backupPath);
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, after);
 }

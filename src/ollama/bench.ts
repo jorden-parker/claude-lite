@@ -39,8 +39,8 @@ export const TOOLS = [
   }),
 ];
 
-export type Verdict = string | null;
-export type BenchTask = {
+type Verdict = string | null;
+type BenchTask = {
   name: string;
   prompt: string;
   history?: ChatMessage[];
@@ -58,7 +58,7 @@ const toolCallsOf = (message: ChatMessage): ToolCall[] => message.tool_calls ?? 
 const expectOnlyCall = (message: ChatMessage, name: string): ToolCall | string => {
   const made = toolCallsOf(message);
   if (made.length !== 1)
-    return `expected one ${name} call, got ${made.map((c) => c.function.name).join(",") || "none"}`;
+    return `expected one ${name} call, got ${made.map((toolCall) => toolCall.function.name).join(",") || "none"}`;
   return made[0].function.name === name
     ? made[0]
     : `called ${made[0].function.name} instead of ${name}`;
@@ -170,7 +170,7 @@ export const promptSpeedTask = (document: string): BenchTask => ({
   check: (message) => (message.content.trim() ? null : "empty answer"),
 });
 
-export type TaskResult = {
+type TaskResult = {
   name: string;
   failure: Verdict;
   evalCount: number;
@@ -181,7 +181,7 @@ export type TaskResult = {
   firstTokenSeconds: number;
 };
 
-export type BenchResult = {
+type BenchResult = {
   model: string;
   thinking: boolean;
   effort?: string;

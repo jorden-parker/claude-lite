@@ -9,10 +9,10 @@ An Ollama launcher for Claude Code, in TypeScript and Bun. Hooks, rules and styl
 
     cl build                     # compile dist/claude-lite in the lite home
     cl update                    # git pull --ff-only, bun install, build, install
-    cl uninstall                 # removes only what install added
+    cl uninstall                 # removes what install added and the server env login agent that cl servers writes
     cl doctor                    # checks the build, shell completion, the cl link, config files, Ollama version, one startup source and the server env; prints the Ollama sandbox and permission mode
     cl logs                      # follows the Ollama logs named in its launchd plists or Ollama.app
-    cl servers                   # finds duplicate Ollama servers on port 11434; checks the server responds; sets the server env (keep-alive, flash attention, q8 KV cache) and writes a login agent that sets it again after a reboot
+    cl servers                   # finds duplicate Ollama servers on port 11434; checks the server responds; sets the server env (keep-alive, one parallel request, flash attention, q8 KV cache, one loaded model) and writes a login agent that sets it again after a reboot
     cl fix-servers               # keeps Ollama.app; moves leftover Ollama LaunchAgents to ~/.Trash
     cl config                    # screen for the Ollama default size, thinking, effort, output tokens, sandbox, permission mode and system prompt
     cl ollama [size]             # launches Claude Code on a local model (see below)
@@ -58,7 +58,7 @@ Needs Ollama ≥ 0.40.12; `cl ollama` refuses to launch on an older server and `
 
 Set `OLLAMA_HOST` (for example `OLLAMA_HOST=studio.local:11434 cl ollama 35b`) to use an Ollama server on another machine. The launcher then checks, pulls and loads on that server, points `claude` at it, adds the host to the sandbox's allowed domains and picks the default size without looking at this machine's memory.
 
-Sandbox and permission mode come from `config/ollama.json`, with gitignored `config/local-ollama.json` deep-merged over it (arrays replace, e.g. `{"sandbox":{"enabled":false},"permissions":{"deny":[],"ask":[]}}`). `cl config` writes that file. Both launch paths add the paths and environment variables in `config/sandbox-secrets.json` to the sandbox's `denyRead` list and denied credentials.
+Sandbox and permission mode come from `config/ollama.json`, with gitignored `config/local-ollama.json` deep-merged over it (arrays replace, e.g. `{"sandbox":{"enabled":false},"permissions":{"deny":[],"ask":[]}}`). `cl config` writes that file. The launcher adds the paths and environment variables in `config/sandbox-secrets.json` to the sandbox's `denyRead` list and denied credentials.
 
 ### Measure a size
 
@@ -77,11 +77,14 @@ parameters or `config/system-prompt.md`; thinking and effort layer the same way 
 | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | -------------------------------------------------------------------------------- |
 | `CLAUDE_LITE_EFFORT`   | Effort level for `cl ollama` (`low`, `medium` or `xhigh` on Qwen3.8; needs thinking on); `--effort` overrides it                                                              | Optional | The size's `effort`, else unset                                                  |
 | `CLAUDE_LITE_HOME`     | The claude-lite checkout that `config/` paths resolve against                                                                                                                 | Optional | The checkout containing the binary (`dist/..`), or the repo when run from source |
+| `CLAUDE_CONFIG_DIR`    | The Claude config directory whose `settings.json` lists the plugins `cl ollama` turns off                                                                                     | Optional | `~/.claude`                                                                      |
 | `CLAUDE_LITE_THINKING` | `on` or `off` sets thinking for `cl ollama`; `--think`/`--no-think` override it                                                                                               | Optional | The size's `thinking`                                                            |
-| `OLLAMA_HOST`          | Address of the Ollama server for `cl ollama` and `cl bench`: `host`, `host:port` or a URL; a remote host skips the local memory check and joins the sandbox's allowed domains | Optional | `localhost:11434`                                                                |
-| `HOME`                 | The user home for install targets and the Ollama logs                                                                                                                         | Optional | `os.homedir()`                                                                   |
+| `OLLAMA_HOST`          | Address of the Ollama server for `cl ollama` and `cl bench`: `host`, `host:port` or a URL; a remote host skips the local memory check and joins the sandbox's allowed domains | Optional | `127.0.0.1:11434`                                                                |
+| `HOME`                 | The user home for install targets, the Ollama logs and the bench history                                                                                                      | Optional | `os.homedir()`                                                                   |
 | `PATH`                 | `install` warns when `~/.local/bin` is missing from it                                                                                                                        | Optional | Empty, so you get the warning                                                    |
 | `ANTHROPIC_API_KEY`    | `cl ollama` removes it from the child env so `claude` talks to Ollama                                                                                                         | Optional | None                                                                             |
+| `EDITOR`               | Editor for the system prompt row in `cl config`, used when `VISUAL` is unset                                                                                                  | Optional | `vi`                                                                             |
+| `VISUAL`               | Editor for the system prompt row in `cl config`, preferred over `EDITOR`                                                                                                      | Optional | `EDITOR`, else `vi`                                                              |
 
 ## Develop
 

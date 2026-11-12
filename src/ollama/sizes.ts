@@ -51,11 +51,11 @@ export function defaultSize(sizes: Record<string, Size>, memoryBytes = totalmem(
   if (fitting.includes(PREFERRED_SIZE)) return PREFERRED_SIZE;
   const largest = fitting
     .filter((name) => sizes[name].memory_gb !== undefined)
-    .sort((a, b) => sizes[b].memory_gb! - sizes[a].memory_gb!)[0];
+    .sort((first, second) => sizes[second].memory_gb! - sizes[first].memory_gb!)[0];
   return largest ?? fitting[0] ?? PREFERRED_SIZE;
 }
 
-export type ResolvedSize = { name: string; size: Size; claudeArgs: string[] };
+type ResolvedSize = { name: string; size: Size; claudeArgs: string[] };
 
 export function resolveSize(
   home: string,

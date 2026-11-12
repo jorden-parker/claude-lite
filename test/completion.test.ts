@@ -54,9 +54,20 @@ describe("nextWords", () => {
   });
   test("bench offers sizes, then its own flags", () => {
     expect(complete("bench")).toEqual([...words.sizes, "--help"]);
-    expect(complete("bench", "27b")).toEqual(["--json", "--think", "--no-think", "--effort"]);
-    expect(complete("bench", "27b", "--json", "--think")).toEqual(["--effort"]);
+    expect(complete("bench", "27b")).toEqual([
+      "--json",
+      "--think",
+      "--no-think",
+      "--effort",
+      "--runs",
+      "--compare",
+    ]);
+    expect(complete("bench", "27b", "--json", "--think", "--compare")).toEqual([
+      "--effort",
+      "--runs",
+    ]);
     expect(complete("bench", "27b", "--effort")).toEqual(["low", "medium", "xhigh"]);
+    expect(complete("bench", "27b", "--runs")).toEqual([]);
   });
   test("unknown command offers nothing", () => {
     expect(complete("nope")).toEqual([]);
