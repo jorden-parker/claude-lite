@@ -27,9 +27,8 @@ const fakeOpenCode = (reportedVersion: string | null) => {
 };
 
 test("opencode gets an inline provider for the served model", async () => {
-  const { calls, envs, run } = fakeOpenCode("2.1.2");
+  const { envs, run } = fakeOpenCode("2.1.2");
   expect(await runOpenCode(OPTIONS, run)).toBe(0);
-  expect(calls.at(-1)).toEqual(["opencode", "run", "hi"]);
   expect(JSON.parse(envs.at(-1)?.OPENCODE_CONFIG_CONTENT ?? "")).toEqual({
     $schema: "https://opencode.ai/config.json",
     model: "claude-lite/qwen3.8-27b-dflash-cc",
@@ -43,6 +42,27 @@ test("opencode gets an inline provider for the served model", async () => {
       },
     },
   });
+});
+
+test("the served model is passed with --model so no opencode config or last-used model wins", async () => {
+  const { calls, run } = fakeOpenCode("2.1.2");
+  expect(await runOpenCode(OPTIONS, run)).toBe(0);
+  expect(calls.at(-1)).toEqual([
+    "opencode",
+    "run",
+    "hi",
+    "--model",
+    "claude-lite/qwen3.8-27b-dflash-cc",
+  ]);
+});
+
+test("a --model or -m the user passes is left alone", async () => {
+  for (const flag of ["--model", "-m"]) {
+    const { calls, run } = fakeOpenCode("2.1.2");
+    const args = ["run", flag, "other/model", "hi"];
+    expect(await runOpenCode({ ...OPTIONS, args }, run)).toBe(0);
+    expect(calls.at(-1)).toEqual(["opencode", ...args]);
+  }
 });
 
 test("opencode is told to browse with agent-browser", () => {

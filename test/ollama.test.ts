@@ -246,7 +246,7 @@ test("--opencode runs opencode on the Ollama /v1 endpoint instead of claude", as
   expect(await launch(home, ["27b", "--opencode", "run", "hi"], run, okApi)).toBe(0);
   const model = loadSizes(home)["27b"].model;
   expect(calls.some((argv) => argv[0] === "claude")).toBe(false);
-  expect(calls.at(-1)).toEqual(["opencode", "run", "hi"]);
+  expect(calls.at(-1)).toEqual(["opencode", "run", "hi", "--model", `claude-lite/${model}`]);
   const config = JSON.parse(envs.at(-1).OPENCODE_CONFIG_CONTENT);
   expect(config.model).toBe(`claude-lite/${model}`);
   expect(config.providers["claude-lite"].settings.baseURL).toBe(`${ollamaUrl()}/v1`);
