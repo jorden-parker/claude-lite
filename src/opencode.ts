@@ -1,6 +1,7 @@
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { liteHome } from "./home.ts";
 import type { Runner } from "./ollama/launch.ts";
 
 const PROVIDER = "claude-lite";
@@ -38,6 +39,7 @@ export async function runOpenCode(
   const config = {
     $schema: "https://opencode.ai/config.json",
     model: `${PROVIDER}/${model}`,
+    instructions: [join(liteHome(), "config", "opencode-instructions.md")],
     providers: {
       [PROVIDER]: {
         name: PROVIDER,

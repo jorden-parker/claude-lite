@@ -76,6 +76,8 @@ Qwen Code runs without claude-lite's permissions, sandbox, secret denies and sys
 
 It needs OpenCode 2.0 or newer and exits 1 otherwise: older versions ignore the `providers` key, and OpenCode falls back to the newest model it can reach, which can be a cloud model.
 
+The config also adds `config/opencode-instructions.md` to `instructions`, which tells OpenCode to browse with [agent-browser](https://agent-browser.dev/) (`brew install agent-browser`) instead of its web fetch tool.
+
 Like Qwen Code, OpenCode runs without claude-lite's permissions, sandbox, secret denies and system prompt. Configure its own permissions in `~/.config/opencode/opencode.json`.
 
 ## Launch on MLX directly

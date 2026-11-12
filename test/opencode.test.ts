@@ -1,6 +1,10 @@
 import { expect, test } from "bun:test";
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { liteHome } from "../src/home.ts";
 import { runOpenCode } from "../src/opencode.ts";
+
+const BROWSER_INSTRUCTIONS = join(liteHome(), "config", "opencode-instructions.md");
 
 const OPTIONS = {
   model: "qwen3.8-27b-dflash-cc",
@@ -29,6 +33,7 @@ test("opencode gets an inline provider for the served model", async () => {
   expect(JSON.parse(envs.at(-1)?.OPENCODE_CONFIG_CONTENT ?? "")).toEqual({
     $schema: "https://opencode.ai/config.json",
     model: "claude-lite/qwen3.8-27b-dflash-cc",
+    instructions: [BROWSER_INSTRUCTIONS],
     providers: {
       "claude-lite": {
         name: "claude-lite",
@@ -38,6 +43,17 @@ test("opencode gets an inline provider for the served model", async () => {
       },
     },
   });
+});
+
+test("opencode is told to browse with agent-browser", () => {
+  const instructions = readFileSync(BROWSER_INSTRUCTIONS, "utf8");
+  for (const command of [
+    "agent-browser open",
+    "agent-browser console",
+    "agent-browser errors",
+    "agent-browser screenshot",
+  ])
+    expect(instructions).toContain(command);
 });
 
 test("opencode 1.x is refused because it ignores the providers config", async () => {
