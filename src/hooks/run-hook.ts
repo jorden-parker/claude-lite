@@ -44,16 +44,27 @@ export function logLine(
     hook,
     event: event.hook_event_name,
     tool: event.tool_name,
+    session: event.session_id,
     decision: specific?.permissionDecision,
     reason: specific?.permissionDecisionReason,
     context: specific?.additionalContext,
     exitCode: result.exitCode,
     stderr: result.stderr,
+    hiddenLines: result.hiddenLines,
   });
 }
 
-function appendHookLog(hook: string, event: HookEvent, result: HookResult): void {
-  const line = logLine(hook, event, result, new Date());
+function crashLine(hook: string, event: HookEvent, error: unknown, now: Date): string {
+  return JSON.stringify({
+    time: now.toISOString(),
+    hook,
+    event: event.hook_event_name,
+    tool: event.tool_name,
+    crashed: error instanceof Error ? error.message : String(error),
+  });
+}
+
+function appendHookLog(line: string | null): void {
   if (!line) return;
   try {
     const path = hookLogPath(process.env.HOME ?? homedir());
@@ -89,9 +100,10 @@ export async function runHook(name: string): Promise<number> {
   let result: HookResult;
   try {
     result = hook(event);
-  } catch {
+  } catch (error) {
+    appendHookLog(crashLine(name, event, error, new Date()));
     return 0;
   }
-  appendHookLog(name, event, result);
+  appendHookLog(logLine(name, event, result, new Date()));
   return emitResult(result);
 }

@@ -9,6 +9,10 @@ type Issue = { severity?: string; title?: string; filePath?: string };
 
 const COMMIT = new RegExp(`${COMMAND_START}git\\s+${GIT_OPTIONS}commit\\b[^;&|)\\n\`]*`);
 const SKIP_HOOKS = /\s(?:--no-verify|-[a-mo-zA-Z]*n[a-zA-Z]*)(?=\s|$)/;
+const DISABLED_HOOKS = /\bHUSKY=0\b|core\.hookspath/i;
+const QUOTED_TEXT = /'[^']*'|"(?:[^"\\]|\\.)*"/g;
+const SKIP_REASON =
+  "Don't skip hooks (--no-verify, HUSKY=0, core.hooksPath); fix the failing check instead.";
 const SCRIPT_ORDER = ["lint", "typecheck", "test"];
 const LOCKFILE_RUNNERS: [string, string][] = [
   ["bun.lock", "bun"],
@@ -119,11 +123,9 @@ export function decide(
   readText: ReadText = readFileText,
 ): HookResult {
   const command = event.tool_input?.command ?? "";
-  const commit = COMMIT.exec(command);
+  const commit = COMMIT.exec(command.replace(QUOTED_TEXT, "''"));
   if (!commit || process.env.CLAUDE_LITE_COMMIT_GUARD === "0") return null;
-  if (SKIP_HOOKS.test(commit[0])) {
-    return deny("Don't skip hooks with --no-verify; fix the failing check instead.");
-  }
+  if (SKIP_HOOKS.test(commit[0]) || DISABLED_HOOKS.test(command)) return deny(SKIP_REASON);
   const cwd = event.cwd ?? process.cwd();
   const top = run(["git", "rev-parse", "--show-toplevel"], cwd);
   if (!top?.ok) return null;

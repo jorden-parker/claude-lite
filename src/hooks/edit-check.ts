@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, extname, join, resolve } from "node:path";
 import { EXTENSION_LANGUAGES, newComments } from "./comments.ts";
+import { newVagueNames } from "./naming.ts";
 import { deny, EDIT_TOOLS, type HookEvent, type HookResult } from "./types.ts";
 
 export type Run = (
@@ -85,6 +86,17 @@ function commentProblems(path: string, input: Record<string, any>, language: str
   ];
 }
 
+function namingProblems(path: string, input: Record<string, any>): string[] {
+  const names = writtenPairs(path, input).flatMap(([before, after]) =>
+    newVagueNames(before, after),
+  );
+  if (!names.length) return [];
+  const listed = [...new Set(names)].join(", ");
+  return [
+    `New vague or too-short names are not allowed; rename them to say what they hold or do: ${listed}`,
+  ];
+}
+
 function toolProblems(
   path: string,
   language: string,
@@ -115,14 +127,14 @@ export function decide(
   const path = resolve(event.cwd ?? ".", input.file_path);
   const language = EXTENSION_LANGUAGES[extname(path)];
   if (!language) return null;
+  const writingProblems = [
+    ...commentProblems(path, input, language),
+    ...(language === "shell" ? [] : namingProblems(path, input)),
+  ];
   if (event.hook_event_name === "PreToolUse") {
-    const problems = commentProblems(path, input, language);
-    return problems.length ? deny(problems.join("\n\n")) : null;
+    return writingProblems.length ? deny(writingProblems.join("\n\n")) : null;
   }
   if (!existsSync(path)) return null;
-  const problems = [
-    ...commentProblems(path, input, language),
-    ...toolProblems(path, language, run, available),
-  ];
+  const problems = [...writingProblems, ...toolProblems(path, language, run, available)];
   return problems.length ? { exitCode: 2, stderr: problems.join("\n\n") } : null;
 }

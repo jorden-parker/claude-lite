@@ -1,5 +1,8 @@
 import { expect, test } from "bun:test";
-import { decide } from "../src/hooks/browser-check.ts";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { decide, decideFromTranscript } from "../src/hooks/browser-check.ts";
 
 const toolUse = (name: string, input: Record<string, unknown>) =>
   JSON.stringify({ message: { role: "assistant", content: [{ type: "tool_use", name, input }] } });
@@ -45,3 +48,12 @@ test("names the edited files in the reason", () =>
 
 test("ignores unparseable transcript lines", () =>
   expect(blocks(["not json", editServer])).toBe(false));
+
+test("decideFromTranscript reads only the end of a long transcript", () => {
+  const transcriptPath = join(mkdtempSync(join(tmpdir(), "bc-")), "session.jsonl");
+  const filler = Array.from({ length: 50 }, () => editServer);
+  writeFileSync(transcriptPath, [editUi, ...filler].join("\n"));
+  const event = { hook_event_name: "Stop", transcript_path: transcriptPath };
+  expect(decideFromTranscript(event)?.exitCode).toBe(2);
+  expect(decideFromTranscript(event, 500)).toBeNull();
+});

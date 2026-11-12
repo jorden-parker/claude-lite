@@ -11,6 +11,10 @@ test.each([
   "find . -name '*.ts'",
   "cat package-lock.json",
   "ls && cat go.sum",
+  "PAGER=cat git log",
+  "env git log",
+  "command git diff",
+  "GIT_PAGER=cat LESS=-R git diff HEAD~1",
 ])("denies %s", (command) => expect(denied(command)).toBe(true));
 
 test.each([
@@ -25,6 +29,9 @@ test.each([
   "echo 'git log'",
   "git status",
   "cat src/a.ts",
+  "PAGER=cat git log -n 5",
+  "env git status",
+  "echo PAGER=cat git log",
 ])("allows %s", (command) => expect(denied(command)).toBe(false));
 
 test("denial messages never point at the denied Glob or Grep tools", () => {

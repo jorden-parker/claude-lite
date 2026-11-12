@@ -104,32 +104,7 @@
     "filesystem": {
       "allowWrite": ["~/.cache/claude-sandbox", "/tmp/claude-skills", "/private/tmp/claude-skills"],
       "allowRead": ["~/.claude/skills"],
-      "denyRead": [
-        "~/.ssh",
-        "~/.aws",
-        "~/.config/gh",
-        "~/.npmrc",
-        "~/Library/Keychains",
-        "~/.claude",
-        "~/.qwen",
-        "~/.config/context7"
-      ]
-    },
-    "credentials": {
-      "envVars": [
-        {
-          "name": "GH_TOKEN",
-          "mode": "deny"
-        },
-        {
-          "name": "GITHUB_TOKEN",
-          "mode": "deny"
-        },
-        {
-          "name": "SHORTCUT_API_TOKEN",
-          "mode": "deny"
-        }
-      ]
+      "denyRead": ["~/.claude", "~/.qwen"]
     }
   }
 }

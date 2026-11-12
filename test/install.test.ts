@@ -15,7 +15,9 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  disable,
   doctor,
+  enable,
   fixServers,
   install,
   logs,
@@ -93,7 +95,7 @@ test("update runs pull, install deps, build, install in order", async () => {
   expect(code).toBe(0);
   expect(calls).toEqual([
     ["git", "-C", "/lite", "pull", "--ff-only"],
-    ["bun", "install", "--cwd", "/lite"],
+    ["bun", "install", "--cwd", "/lite", "--frozen-lockfile"],
     ["bun", "run", "--cwd", "/lite", "build"],
     ["/lite/dist/claude-lite", "install"],
   ]);
@@ -440,4 +442,96 @@ test("uninstall removes completion files but leaves foreign ones", async () => {
   expect(existsSync(completionFiles(user).zsh)).toBe(false);
   expect(existsSync(completionFiles(user).bash)).toBe(false);
   expect(readFileSync(completionFiles(user).fish, "utf8")).toBe("mine\n");
+});
+
+const SHELL_RC_SEGMENTS: [string, string[]][] = [
+  ["zsh", [".zshrc"]],
+  ["bash", [".bashrc"]],
+  ["fish", [".config", "fish", "config.fish"]],
+];
+
+for (const [shell, rcSegments] of SHELL_RC_SEGMENTS) {
+  const shellPath = Bun.which(shell);
+  test.skipIf(shellPath === null)(
+    `${shell} claude function passes through unwrapped when CLAUDE_LITE_WRAP=0`,
+    async () => {
+      const user = fixture();
+      mkdirSync(join(user, ".config", "fish"), { recursive: true });
+      writeFileSync(join(user, ".bashrc"), "");
+      writeFileSync(join(user, ".config", "fish", "config.fish"), "");
+      const liteHome = join(user, "lite");
+      mkdirSync(join(liteHome, "dist"), { recursive: true });
+      writeFileSync(join(liteHome, "dist", "claude-lite"), "#!/bin/sh\necho '{}'\n", {
+        mode: 0o755,
+      });
+      await install(user, liteHome);
+      const fakeBinDirectory = join(user, "fake-bin");
+      mkdirSync(fakeBinDirectory);
+      writeFileSync(join(fakeBinDirectory, "claude"), '#!/bin/sh\necho "$@"\n', { mode: 0o755 });
+      const rcPath = join(user, ...rcSegments);
+      const runClaude = (wrapSetting: string | undefined) => {
+        const result = Bun.spawnSync(
+          [shellPath ?? shell, "-c", `source "${rcPath}"; claude one two`],
+          {
+            env: {
+              HOME: user,
+              PATH: `${fakeBinDirectory}:/usr/bin:/bin`,
+              ...(wrapSetting === undefined ? {} : { CLAUDE_LITE_WRAP: wrapSetting }),
+            },
+          },
+        );
+        return result.stdout.toString().trim();
+      };
+      expect(runClaude("0")).toBe("one two");
+      expect(runClaude(undefined)).toBe("--settings {} one two");
+      expect(runClaude("1")).toBe("--settings {} one two");
+    },
+  );
+}
+
+function fixtureWithAllShells() {
+  const user = fixture();
+  writeFileSync(join(user, ".bashrc"), "export B=1\n");
+  mkdirSync(join(user, ".config", "fish"), { recursive: true });
+  writeFileSync(join(user, ".config", "fish", "config.fish"), "set -gx C 1\n");
+  return user;
+}
+
+const readRc = (user: string, ...segments: string[]) =>
+  readFileSync(join(user, ...segments), "utf8");
+
+test("disable sets CLAUDE_LITE_WRAP=0 in each shell rc once, enable removes it", async () => {
+  const user = fixtureWithAllShells();
+  expect(await disable(user, "/lite")).toBe(0);
+  await disable(user, "/lite");
+  expect(readRc(user, ".zshrc").match(/export CLAUDE_LITE_WRAP=0/g)?.length).toBe(1);
+  expect(readRc(user, ".bashrc").match(/export CLAUDE_LITE_WRAP=0/g)?.length).toBe(1);
+  expect(
+    readRc(user, ".config", "fish", "config.fish").match(/set -gx CLAUDE_LITE_WRAP 0/g)?.length,
+  ).toBe(1);
+  expect(await enable(user, "/lite")).toBe(0);
+  expect(readRc(user, ".zshrc")).toBe("export A=1\n");
+  expect(readRc(user, ".bashrc")).toBe("export B=1\n");
+  expect(readRc(user, ".config", "fish", "config.fish")).toBe("set -gx C 1\n");
+});
+
+test("disable survives install and uninstall removes it with the claude function", async () => {
+  const user = fixtureWithAllShells();
+  await install(user, "/lite");
+  await disable(user, "/lite");
+  await install(user, "/lite");
+  expect(readRc(user, ".zshrc")).toContain("export CLAUDE_LITE_WRAP=0");
+  expect(readRc(user, ".zshrc")).toContain("claude() {");
+  await uninstall(user, "/lite");
+  expect(readRc(user, ".zshrc")).toBe("export A=1\n");
+  expect(readRc(user, ".config", "fish", "config.fish")).toBe("set -gx C 1\n");
+});
+
+test("enable leaves the claude function installed", async () => {
+  const user = fixtureWithAllShells();
+  await install(user, "/lite");
+  await disable(user, "/lite");
+  await enable(user, "/lite");
+  expect(readRc(user, ".zshrc")).not.toContain("CLAUDE_LITE_WRAP=0");
+  expect(readRc(user, ".zshrc")).toContain("claude() {");
 });

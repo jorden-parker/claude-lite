@@ -10,6 +10,7 @@ These rules apply to every project and every language, with no exceptions.
 - Self-describing code: a name says what it holds or does, so the structure
   explains itself. Not `tmp`, `data2`, `obj`, `handleStuff`, `utils.ts`:
   `parsedConfig`, `retryCount`, `closeIdleSockets`, `profile-rules.ts`.
+  (new declarations are enforced by the edit-check hook)
 - Keep designs simple: SOLID, KISS, YAGNI. Add only what the task needs.
 - No comments, including lint suppressions. Rewrite unclear code instead.
   (enforced by the edit-check hook)

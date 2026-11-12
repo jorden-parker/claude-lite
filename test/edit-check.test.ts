@@ -115,3 +115,21 @@ test("runs a linter the project lists", () => {
   const { root, source } = jsProject({ devDependencies: { prettier: "1" } });
   expect(decide(jsEdit(root, source), failing, () => false)?.exitCode).toBe(2);
 });
+
+const vagueDeclaration = ["const", "tmp", "=", "1;"].join(" ");
+const writeScript = (content: string) => ({
+  hook_event_name: "PreToolUse",
+  tool_name: "Write",
+  cwd: dir,
+  tool_input: { file_path: join(dir, "fresh/script.ts"), content },
+});
+
+test("denies a new vague name before the edit lands", () => {
+  const result = decide(writeScript(`${vagueDeclaration}\n`));
+  expect(JSON.stringify(result?.output)).toContain("vague or too-short names");
+  expect(JSON.stringify(result?.output)).toContain("tmp");
+});
+
+test("lets a descriptive name through", () => {
+  expect(decide(writeScript("const retryCount = 1;\n"))).toBeNull();
+});

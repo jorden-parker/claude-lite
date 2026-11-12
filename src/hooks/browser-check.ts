@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { closeSync, openSync, readSync, statSync } from "node:fs";
 import { basename } from "node:path";
 import { EDIT_TOOLS, type HookEvent, type HookResult } from "./types.ts";
 
@@ -46,7 +46,25 @@ export function decide(event: HookEvent, transcript: string): HookResult {
   };
 }
 
-export function decideFromTranscript(event: HookEvent): HookResult {
+const MAX_TRANSCRIPT_BYTES = 20_000_000;
+
+function transcriptTail(path: string, maxBytes: number): string {
+  const size = statSync(path).size;
+  const start = Math.max(0, size - maxBytes);
+  const descriptor = openSync(path, "r");
+  try {
+    const tail = Buffer.alloc(size - start);
+    readSync(descriptor, tail, 0, tail.length, start);
+    return tail.toString("utf8");
+  } finally {
+    closeSync(descriptor);
+  }
+}
+
+export function decideFromTranscript(
+  event: HookEvent,
+  maxBytes = MAX_TRANSCRIPT_BYTES,
+): HookResult {
   if (!event.transcript_path) return null;
-  return decide(event, readFileSync(event.transcript_path, "utf8"));
+  return decide(event, transcriptTail(event.transcript_path, maxBytes));
 }

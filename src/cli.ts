@@ -5,30 +5,39 @@ import { liteHome } from "./home.ts";
 import { COMMAND_HELP, USAGE } from "./help.ts";
 import { runHook } from "./hooks/run-hook.ts";
 import {
+  config,
+  disable,
   doctor,
+  enable,
   fixServers,
   install,
   logs,
   servers,
   settings,
+  stats,
   uninstall,
   update,
   build,
 } from "./install.ts";
+import { bench } from "./ollama/bench.ts";
 import { launch } from "./ollama/launch.ts";
 
 const LIFECYCLE: Record<
-  Exclude<keyof typeof COMMAND_HELP, "hook" | "ollama">,
+  Exclude<keyof typeof COMMAND_HELP, "hook" | "ollama" | "bench">,
   (userHome: string, home: string) => Promise<number>
 > = {
   install,
   uninstall,
   update,
   build,
+  disable,
+  enable,
   doctor,
   logs,
   servers,
   settings,
+  stats,
+  config,
   "fix-servers": fixServers,
 };
 
@@ -45,7 +54,7 @@ async function runLifecycle(name: keyof typeof LIFECYCLE, extraArgs: string[], h
     return 2;
   }
   const code = await LIFECYCLE[name](process.env.HOME ?? homedir(), home);
-  if (name === "settings") return code;
+  if (name === "settings" || name === "config") return code;
   console.log(
     code === 0 ? `claude-lite: ${name} done` : `claude-lite: ${name} failed (exit ${code})`,
   );
@@ -63,6 +72,25 @@ function printHelp(topic: string | undefined) {
   return 0;
 }
 
+type ArgumentCommand = (home: string, commandArgs: string[]) => Promise<number>;
+
+const ARGUMENT_COMMANDS: Record<"hook" | "ollama" | "bench", ArgumentCommand> = {
+  hook: async (_home, commandArgs) => runHookCommand(commandArgs[0]),
+  ollama: launch,
+  bench,
+};
+
+async function runCommand(command: string | undefined, rest: string[], home: string) {
+  if (Object.hasOwn(ARGUMENT_COMMANDS, command ?? "")) {
+    return await ARGUMENT_COMMANDS[command as keyof typeof ARGUMENT_COMMANDS](home, rest);
+  }
+  if (Object.hasOwn(LIFECYCLE, command ?? "")) {
+    return await runLifecycle(command as keyof typeof LIFECYCLE, rest, home);
+  }
+  console.error(USAGE);
+  return 2;
+}
+
 async function main(argv: string[]): Promise<number> {
   const [command, ...rest] = argv;
   const home = liteHome();
@@ -73,13 +101,7 @@ async function main(argv: string[]): Promise<number> {
   if (command === "help") return printHelp(rest[0]);
   if (isHelpFlag(command)) return printHelp(undefined);
   if (isCommand(command) && isHelpFlag(rest[0])) return printHelp(command);
-  if (command === "hook") return await runHookCommand(rest[0]);
-  if (command === "ollama") return await launch(home, rest);
-  if (Object.hasOwn(LIFECYCLE, command ?? "")) {
-    return await runLifecycle(command as keyof typeof LIFECYCLE, rest, home);
-  }
-  console.error(USAGE);
-  return 2;
+  return await runCommand(command, rest, home);
 }
 
 process.exit(await main(process.argv.slice(2)));

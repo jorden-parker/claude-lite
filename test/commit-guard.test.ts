@@ -109,3 +109,15 @@ test("passes when opted out", () => {
     delete process.env.CLAUDE_LITE_COMMIT_GUARD;
   }
 });
+
+test("allows -n inside a quoted commit message", () =>
+  expect(decideWith({}, 'git commit -m "add -n flag"')).toBeNull());
+
+test.each([
+  "HUSKY=0 git commit -m x",
+  "env git commit --no-verify -m x",
+  "git -c core.hooksPath=/dev/null commit -m x",
+  'git commit -m "one; two" --no-verify',
+])("denies hook skipping in %s", (command) =>
+  expect(reason(decideWith({}, command))).toContain("fix the failing check"),
+);

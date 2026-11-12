@@ -10,7 +10,12 @@ export type HookEvent = {
   tool_response?: Record<string, any>;
 };
 
-export type HookResult = { output?: unknown; exitCode?: number; stderr?: string } | null;
+export type HookResult = {
+  output?: unknown;
+  exitCode?: number;
+  stderr?: string;
+  hiddenLines?: number;
+} | null;
 
 export const deny = (reason: string, hookEventName = "PreToolUse"): HookResult => ({
   output: {

@@ -8,8 +8,8 @@ import { settings } from "../src/install.ts";
 function liteHomeWith(base: object, overlay?: string) {
   const home = mkdtempSync(join(tmpdir(), "settings-"));
   mkdirSync(join(home, "config"));
-  writeFileSync(join(home, "config", "personal-settings.json"), JSON.stringify(base));
-  if (overlay !== undefined) writeFileSync(join(home, "config", "local-settings.json"), overlay);
+  writeFileSync(join(home, "config", "claude.json"), JSON.stringify(base));
+  if (overlay !== undefined) writeFileSync(join(home, "config", "local-claude.json"), overlay);
   return home;
 }
 
@@ -52,9 +52,7 @@ test("invalid overlay falls back to the base settings", async () => {
 });
 
 test("personal settings trim idle and effort token spend", async () => {
-  const personal = await Bun.file(
-    join(import.meta.dir, "..", "config", "personal-settings.json"),
-  ).json();
+  const personal = await Bun.file(join(import.meta.dir, "..", "config", "claude.json")).json();
   expect(personal.effortLevel).toBe("medium");
   expect(personal.idleCompaction).toBe(false);
   expect(personal.env.CLAUDE_CODE_ENABLE_AWAY_SUMMARY).toBe("0");
@@ -74,14 +72,23 @@ async function printedWithOptOut(variable: string) {
   }
 }
 
-test("CLAUDE_LITE_NO_PERMISSIONS=anthropic prints no permissions", async () => {
-  expect(await printedWithOptOut("CLAUDE_LITE_NO_PERMISSIONS")).toBe(
-    '{"sandbox":{"enabled":true},"keep":1}',
-  );
+test.each(["CLAUDE_LITE_NO_PERMISSIONS", "CLAUDE_LITE_NO_SANDBOX"])(
+  "retired %s=anthropic no longer changes settings",
+  async (variable) => {
+    expect(await printedWithOptOut(variable)).toBe(
+      '{"permissions":{"deny":["x"]},"sandbox":{"enabled":true},"keep":1}',
+    );
+  },
+);
+
+test("settings output carries the hooks from hooks.json", async () => {
+  const home = liteHomeWith({ keep: 1 });
+  const hooks = { Stop: [{ hooks: [{ type: "command", command: "x hook fallow-stop" }] }] };
+  writeFileSync(join(home, "config", "hooks.json"), JSON.stringify(hooks));
+  expect(JSON.parse(await printedSettings(home))).toEqual({ keep: 1, hooks });
 });
 
-test("CLAUDE_LITE_NO_SANDBOX=anthropic prints no sandbox", async () => {
-  expect(await printedWithOptOut("CLAUDE_LITE_NO_SANDBOX")).toBe(
-    '{"permissions":{"deny":["x"]},"keep":1}',
-  );
+test("personal settings leave hook wiring to hooks.json", async () => {
+  const personal = await Bun.file(join(import.meta.dir, "..", "config", "claude.json")).json();
+  expect(personal.hooks).toBeUndefined();
 });

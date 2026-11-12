@@ -26,6 +26,9 @@ function trimLines(lines: string[]): string[] {
 
 const trimText = (text: string) => trimLines(text.split("\n")).map(clip).join("\n");
 
+const HIDDEN_COUNT = /\[bash-trim: (\d+) lines hidden/;
+const hiddenIn = (text: unknown) => Number(HIDDEN_COUNT.exec(String(text))?.[1] ?? 0);
+
 export function decide(event: HookEvent): HookResult {
   const response = event.tool_response;
   if (event.tool_name !== "Bash" || !response || typeof response !== "object") return null;
@@ -36,5 +39,6 @@ export function decide(event: HookEvent): HookResult {
   if (JSON.stringify(trimmed) === JSON.stringify(response)) return null;
   return {
     output: { hookSpecificOutput: { hookEventName: "PostToolUse", updatedToolOutput: trimmed } },
+    hiddenLines: hiddenIn(trimmed.stdout) + hiddenIn(trimmed.stderr),
   };
 }

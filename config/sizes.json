@@ -5,13 +5,12 @@
     "context": 65536,
     "output_tokens": 8192,
     "thinking": false,
-    "permissions": true,
-    "sandbox": true,
     "parameters": {
       "temperature": 0.7,
       "top_k": 20,
       "top_p": 0.8
-    }
+    },
+    "memory_gb": 16.9
   },
   "35b": {
     "base": "qwen3.6:35b-mlx",
@@ -19,12 +18,25 @@
     "context": 65536,
     "output_tokens": 8192,
     "thinking": false,
-    "permissions": true,
-    "sandbox": true,
     "parameters": {
       "temperature": 0.6,
       "top_k": 20,
       "top_p": 0.95,
+      "min_p": 0
+    },
+    "memory_gb": 22.0
+  },
+  "9b": {
+    "base": "qwen3.5:9b-mtp-q4_K_M",
+    "model": "qwen3.5-9b-mtp-cc",
+    "context": 65536,
+    "output_tokens": 8192,
+    "thinking": false,
+    "memory_gb": 9.0,
+    "parameters": {
+      "temperature": 0.7,
+      "top_k": 20,
+      "top_p": 0.8,
       "min_p": 0
     }
   }

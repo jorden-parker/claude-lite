@@ -36,11 +36,38 @@ function lineComment(line: string, markers: string[]): string | null {
   return null;
 }
 
+const DEFINITION = /^\s*(?:async\s+)?(?:def|class)\s.*:\s*$/;
+const DOCSTRING_START = /^[rRbBuUfF]{0,2}(?:"""|''')/;
+
+function blockCommentLines(lines: string[], markers: string[]): string[] {
+  const found: string[] = [];
+  let isInsideBlock = false;
+  for (const line of lines) {
+    const comment: string | null = isInsideBlock ? line.trim() : lineComment(line, markers);
+    if (comment) found.push(comment);
+    if (isInsideBlock) isInsideBlock = !line.includes("*/");
+    else isInsideBlock = !!comment && comment.startsWith("/*") && !comment.includes("*/");
+  }
+  return found;
+}
+
+function docstringLines(lines: string[]): string[] {
+  const found: string[] = [];
+  let isAfterDefinition = false;
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (isAfterDefinition && DOCSTRING_START.test(trimmed)) found.push(trimmed);
+    if (trimmed) isAfterDefinition = DEFINITION.test(line);
+  }
+  return found;
+}
+
 function commentsIn(text: string, language: string): string[] {
-  return text
-    .split("\n")
-    .map((line) => lineComment(line, MARKERS[language]))
-    .filter((c): c is string => !!c && !ALLOWED.some((a) => c.startsWith(a)));
+  const lines = text.split("\n");
+  const docstrings = language === "python" ? docstringLines(lines) : [];
+  return [...blockCommentLines(lines, MARKERS[language]), ...docstrings].filter(
+    (comment) => !ALLOWED.some((allowed) => comment.startsWith(allowed)),
+  );
 }
 
 export function newComments(before: string, after: string, language: string): string[] {

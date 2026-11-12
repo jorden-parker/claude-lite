@@ -1,6 +1,7 @@
 import { deny, type HookEvent, type HookResult } from "./types.ts";
 
-export const COMMAND_START = String.raw`(?:^|[;&|(\n\`]\s*)`;
+const COMMAND_PREFIX = String.raw`(?:(?:\w+=\S*|env|command)\s+)*`;
+export const COMMAND_START = String.raw`(?:^|[;&|(\n\`]\s*)${COMMAND_PREFIX}`;
 const SEGMENT_BODY = String.raw`[^;&|)\n\`]*`;
 const BOUNDED_FILTER = String.raw`\|\s*(?:head|tail|wc|grep|sed\s+-n)\b`;
 const NOT_BOUNDED = `(?!${SEGMENT_BODY}${BOUNDED_FILTER})`;

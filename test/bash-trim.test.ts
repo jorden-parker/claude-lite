@@ -22,6 +22,11 @@ test("long output keeps head, tail, errors and Bash shape", () => {
   expect(out.stdout).not.toContain("line 100\n");
 });
 
+test("long output reports how many lines were hidden", () => {
+  const lines = Array.from({ length: 400 }, (_, i) => `line ${i}`);
+  expect(run(lines.join("\n")).hiddenLines).toBe(310);
+});
+
 test("long lines are clipped", () => {
   const out = run("x".repeat(1000)).output.hookSpecificOutput.updatedToolOutput;
   expect(out.stdout).toContain("600 chars hidden");

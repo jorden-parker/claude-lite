@@ -7,7 +7,7 @@
   "type": "module",
   "scripts": {
     "test": "bun test",
-    "build": "bun build --compile src/cli.ts --outfile dist/claude-lite",
+    "build": "bun build --compile src/cli.ts --outfile dist/claude-lite && rm -f .*.bun-build",
     "lint": "oxlint . && oxfmt --check .",
     "prepare": "husky",
     "format": "oxfmt .",
@@ -16,7 +16,7 @@
   "devDependencies": {
     "@commitlint/cli": "^21.2.4",
     "@commitlint/config-conventional": "^21.2.4",
-    "@types/bun": "latest",
+    "@types/bun": "1.4.4",
     "husky": "^9.1.7",
     "lint-staged": "^17.6.0",
     "oxfmt": "^0.76.0",

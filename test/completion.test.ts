@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { completionPath, completionScript, nextWords } from "../src/completion.ts";
 
 const words = {
-  commands: ["install", "doctor", "hook", "ollama"],
+  commands: ["install", "doctor", "hook", "ollama", "bench"],
   hooks: ["bash-guard", "tdd-guard"],
   sizes: ["27b", "35b"],
 };
@@ -13,15 +13,7 @@ const shells = ["zsh", "bash", "fish"] as const;
 const syntaxCheck = { zsh: ["zsh", "-n"], bash: ["bash", "-n"], fish: ["fish", "-n"] };
 
 const complete = (...typed: string[]) => nextWords(typed, words);
-const ollamaFlags = [
-  "--think",
-  "--no-think",
-  "--permissions",
-  "--no-permissions",
-  "--sandbox",
-  "--no-sandbox",
-  "--effort",
-];
+const ollamaFlags = ["--think", "--no-think", "--effort"];
 
 describe("nextWords", () => {
   test("offers commands and help first", () => {
@@ -45,26 +37,9 @@ describe("nextWords", () => {
   test("ollama offers flags after a size", () => {
     expect(complete("ollama", "27b")).toEqual(["--print-config", ...ollamaFlags]);
   });
-  test("ollama drops the used sandbox pair", () => {
-    expect(complete("ollama", "27b", "--no-sandbox")).toEqual([
-      "--print-config",
-      "--think",
-      "--no-think",
-      "--permissions",
-      "--no-permissions",
-      "--effort",
-    ]);
-  });
   test("ollama drops sizes, used flags and their pair", () => {
     const next = complete("ollama", "27b", "--think");
-    expect(next).toEqual([
-      "--print-config",
-      "--permissions",
-      "--no-permissions",
-      "--sandbox",
-      "--no-sandbox",
-      "--effort",
-    ]);
+    expect(next).toEqual(["--print-config", "--effort"]);
   });
   test("ollama drops --effort once its value is typed", () => {
     expect(complete("ollama", "27b", "--effort", "low")).toEqual([
@@ -77,6 +52,12 @@ describe("nextWords", () => {
   });
   test("ollama offers nothing after --help", () => {
     expect(complete("ollama", "--help")).toEqual([]);
+  });
+  test("bench offers sizes, then its own flags", () => {
+    expect(complete("bench")).toEqual([...words.sizes, "--help"]);
+    expect(complete("bench", "27b")).toEqual(["--json", "--think", "--no-think", "--effort"]);
+    expect(complete("bench", "27b", "--json", "--think")).toEqual(["--effort"]);
+    expect(complete("bench", "27b", "--effort")).toEqual(["low", "medium", "xhigh"]);
   });
   test("unknown command offers nothing", () => {
     expect(complete("nope")).toEqual([]);

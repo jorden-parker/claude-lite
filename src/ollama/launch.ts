@@ -1,10 +1,12 @@
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
-import { homedir, tmpdir } from "node:os";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { homedir, tmpdir, totalmem } from "node:os";
 import { join } from "node:path";
-import { renderModelfile } from "./modelfile.ts";
+import { fetchApi, type LauncherApi, ollamaUrl } from "./api.ts";
+import { hasParameters, renderModelfile } from "./modelfile.ts";
 import { renderSettings } from "./settings.ts";
-import { applyEnv, applyFlags } from "./size-overrides.ts";
-import { DEFAULT_SIZE, loadSizes, pickSize } from "./sizes.ts";
+import { fittingSizes, loadSizes, resolveSize, type Size } from "./sizes.ts";
+import { withJsonOverlay } from "../json-overlay.ts";
+import { withSharedSecrets } from "../sandbox-secrets.ts";
 
 export type Runner = (argv: string[], env?: Record<string, string | undefined>) => Promise<number>;
 
@@ -13,35 +15,65 @@ export const spawnRunner: Runner = async (argv, env) =>
     .exited;
 
 const TOOLS = "Bash,Read,Edit,Write,Skill";
-const OLLAMA_URL = "http://localhost:11434";
 
-export const serverResponds = async (run: Runner) =>
-  (await run([
-    "curl",
-    "-sf",
-    "-o",
-    "/dev/null",
-    "--max-time",
-    "2",
-    `${OLLAMA_URL}/api/version`,
-  ])) === 0;
+export const MINIMUM_OLLAMA = "0.40.12";
+
+type ServerStatus = { isResponding: boolean; version: string | null };
+
+function readVersion(replyPath: string): string | null {
+  try {
+    return JSON.parse(readFileSync(replyPath, "utf8")).version ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function serverStatus(run: Runner): Promise<ServerStatus> {
+  const dir = mkdtempSync(join(tmpdir(), "claude-lite-version-"));
+  const replyPath = join(dir, "version.json");
+  const versionUrl = `${ollamaUrl()}/api/version`;
+  try {
+    const code = await run(["curl", "-sf", "-o", replyPath, "--max-time", "2", versionUrl]);
+    return { isResponding: code === 0, version: code === 0 ? readVersion(replyPath) : null };
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+export const serverResponds = async (run: Runner) => (await serverStatus(run)).isResponding;
+
+const numericParts = (version: string) =>
+  version.split(".").map((part) => Number.parseInt(part, 10) || 0);
+
+export function isSupportedVersion(version: string | null): boolean {
+  if (version === null) return true;
+  const actual = numericParts(version);
+  const minimum = numericParts(MINIMUM_OLLAMA);
+  const differing = minimum.findIndex((part, i) => (actual[i] ?? 0) !== part);
+  return differing < 0 || (actual[differing] ?? 0) > minimum[differing];
+}
+
+function withServerUrl<Settings extends Record<string, any>>(settings: Settings, url: string) {
+  const network = settings.sandbox?.network;
+  const allowedDomains = [...new Set([...(network?.allowedDomains ?? []), new URL(url).hostname])];
+  return {
+    ...settings,
+    env: { ...settings.env, ANTHROPIC_BASE_URL: url },
+    ...(network && { sandbox: { ...settings.sandbox, network: { ...network, allowedDomains } } }),
+  };
+}
 
 function buildPlan(home: string, args: string[]) {
-  const sizes = loadSizes(home);
-  const [first, ...rest] = args;
-  const isSize = first !== undefined && Object.hasOwn(sizes, first);
-  const sizeName = isSize ? first : DEFAULT_SIZE;
-  const sizeArgs = isSize ? rest : args;
-  const { size, claudeArgs } = applyFlags(
-    applyEnv(pickSize(sizes, sizeName), process.env),
-    sizeArgs,
-  );
+  const { name, size, claudeArgs } = resolveSize(home, args);
   const read = (name: string) => JSON.parse(readFileSync(join(home, "config", name), "utf8"));
-  const settings = {
-    ...renderSettings(read("ollama-base.json"), read("hooks.json"), size),
+  const overlaid = withJsonOverlay(read("ollama.json"), join(home, "config", "local-ollama.json"));
+  const base = withSharedSecrets(overlaid, home);
+  const rendered = {
+    ...renderSettings(base, read("hooks.json"), size),
     enabledPlugins: disabledUserPlugins(),
   };
-  return { size, settings, modelfile: renderModelfile(size), claudeArgs };
+  const settings = process.env.OLLAMA_HOST ? withServerUrl(rendered, ollamaUrl()) : rendered;
+  return { name, size, settings, modelfile: renderModelfile(size), claudeArgs };
 }
 
 function disabledUserPlugins(): Record<string, false> {
@@ -54,10 +86,38 @@ function disabledUserPlugins(): Record<string, false> {
   }
 }
 
+export function loadFailureHint(home: string, sizeName: string, memoryBytes = totalmem()): string {
+  const smaller = fittingSizes(loadSizes(home), memoryBytes).filter((name) => name !== sizeName);
+  return smaller.length
+    ? `sizes that fit this machine: ${smaller.map((name) => `cl ollama ${name}`).join(", ")}`
+    : "no configured size fits this machine; add a smaller one to config/local-sizes.json";
+}
+
+async function isCurrentModel(size: Size, api: LauncherApi): Promise<boolean> {
+  const reported = await api.parameters(size.model);
+  return reported === null || hasParameters(reported, size);
+}
+
+async function ensureModel(
+  size: Size,
+  modelfile: string,
+  dir: string,
+  run: Runner,
+  api: LauncherApi,
+) {
+  const isCreated = (await run(["ollama", "show", size.model])) === 0;
+  if (isCreated && (await isCurrentModel(size, api))) return true;
+  if (!isCreated && (await run(["ollama", "pull", size.base])) !== 0) return false;
+  const modelfilePath = join(dir, "Modelfile");
+  writeFileSync(modelfilePath, modelfile);
+  return (await run(["ollama", "create", size.model, "-f", modelfilePath])) === 0;
+}
+
 export async function launch(
   home: string,
   args: string[],
   run: Runner = spawnRunner,
+  api: LauncherApi = fetchApi,
 ): Promise<number> {
   if (args.includes("--print-config")) {
     const { settings, modelfile } = buildPlan(
@@ -68,24 +128,46 @@ export async function launch(
     console.log(JSON.stringify(settings, null, 2));
     return 0;
   }
-  const { size, settings, modelfile, claudeArgs } = buildPlan(home, args);
-  if (!(await serverResponds(run))) {
-    console.error("Ollama is not responding on localhost:11434; run cl servers");
+  const plan = buildPlan(home, args);
+  const server = await serverStatus(run);
+  if (!server.isResponding) {
+    console.error(`Ollama is not responding on ${ollamaUrl()}; run cl servers`);
+    return 1;
+  }
+  if (!isSupportedVersion(server.version)) {
+    console.error(`Ollama ${server.version} is older than ${MINIMUM_OLLAMA}; update Ollama`);
     return 1;
   }
   const dir = mkdtempSync(join(tmpdir(), "claude-lite-"));
-  if ((await run(["ollama", "show", size.model])) !== 0) {
-    if ((await run(["ollama", "pull", size.base])) !== 0) return 1;
-    const modelfilePath = join(dir, "Modelfile");
-    writeFileSync(modelfilePath, modelfile);
-    if ((await run(["ollama", "create", size.model, "-f", modelfilePath])) !== 0) return 1;
+  try {
+    return await launchFrom(dir, home, plan, run, api);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+type LaunchPlan = ReturnType<typeof buildPlan>;
+
+async function launchFrom(
+  dir: string,
+  home: string,
+  { name, size, settings, modelfile, claudeArgs }: LaunchPlan,
+  run: Runner,
+  api: LauncherApi,
+): Promise<number> {
+  if (!(await ensureModel(size, modelfile, dir, run, api))) return 1;
+  const loadError = await api.load(size.model);
+  if (loadError !== null) {
+    console.error(`${size.model} failed to load: ${loadError}`);
+    console.error(loadFailureHint(home, name));
+    return 1;
   }
   const settingsPath = join(dir, "settings.json");
   writeFileSync(settingsPath, JSON.stringify(settings, null, 2), { mode: 0o600 });
   const env: Record<string, string | undefined> = {
     ...process.env,
     CLAUDE_LITE_HOME: home,
-    ANTHROPIC_BASE_URL: OLLAMA_URL,
+    ANTHROPIC_BASE_URL: ollamaUrl(),
   };
   delete env.ANTHROPIC_API_KEY;
   return await run(

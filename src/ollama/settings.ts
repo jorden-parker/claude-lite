@@ -1,15 +1,17 @@
 import type { Size } from "./sizes.ts";
 
-export function renderSettings(base: Record<string, any>, hooks: unknown, size: Size) {
+export function renderSettings(
+  base: Record<string, any>,
+  hooks: unknown,
+  size: Size,
+): Record<string, any> {
   const model = size.model;
   const extraBody = size.thinking
     ? size.effort && { output_config: { effort: size.effort } }
     : { thinking: { type: "disabled" } };
   const { CLAUDE_CODE_EXTRA_BODY: _baseBody, ...baseEnv } = base.env ?? {};
-  const { sandbox, permissions: _basePermissions, ...baseRest } = base;
   return {
-    ...baseRest,
-    ...(size.sandbox && sandbox !== undefined && { sandbox }),
+    ...base,
     model,
     availableModels: [model],
     ...(size.effort && { effortLevel: size.effort }),
@@ -22,12 +24,6 @@ export function renderSettings(base: Record<string, any>, hooks: unknown, size: 
       CLAUDE_CODE_MAX_OUTPUT_TOKENS: String(size.output_tokens),
       ...(extraBody && { CLAUDE_CODE_EXTRA_BODY: JSON.stringify(extraBody) }),
     },
-    ...(size.permissions && {
-      permissions: {
-        ...base.permissions,
-        deny: [...new Set([...(base.permissions?.deny ?? []), "Agent"])],
-      },
-    }),
     hooks,
   };
 }

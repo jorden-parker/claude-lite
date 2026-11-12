@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { COMMAND_HELP } from "../src/help.ts";
+import { FLAGS } from "../src/ollama/size-overrides.ts";
 
 const runCli = (...args: string[]) => Bun.spawnSync(["bun", "src/cli.ts", ...args]);
 
@@ -47,16 +51,39 @@ describe("cli help", () => {
 });
 
 test("ollama help lists every ollama flag", () => {
-  const flags = [
-    "--print-config",
-    "--think",
-    "--no-think",
-    "--permissions",
-    "--no-permissions",
-    "--sandbox",
-    "--no-sandbox",
-  ];
+  const flags = ["--print-config", "--effort", ...Object.keys(FLAGS)];
   for (const flag of flags) expect(COMMAND_HELP.ollama).toContain(flag);
+});
+
+test("bench help lists its flags", () => {
+  for (const flag of ["--json", "--think", "--effort", "--runs", "--compare"]) {
+    expect(COMMAND_HELP.bench).toContain(flag);
+  }
+});
+
+test("ollama and bench help list every configured size", async () => {
+  const sizes = await Bun.file(join(import.meta.dir, "..", "config", "sizes.json")).json();
+  for (const sizeName of Object.keys(sizes)) {
+    expect(COMMAND_HELP.ollama).toContain(sizeName);
+    expect(COMMAND_HELP.bench).toContain(sizeName);
+  }
+});
+
+test("servers help says it sets the server env", () => {
+  expect(COMMAND_HELP.servers).toContain("launchctl setenv");
+});
+
+test("stats has help text", () => {
+  expect(Object.keys(COMMAND_HELP)).toContain("stats");
+});
+
+test("stats runs and summarizes an empty hook log", () => {
+  const userHome = mkdtempSync(join(tmpdir(), "cli-stats-"));
+  const result = Bun.spawnSync(["bun", "src/cli.ts", "stats"], {
+    env: { ...process.env, HOME: userHome },
+  });
+  expect(result.exitCode).toBe(0);
+  expect(result.stdout.toString()).toContain("no hook decisions logged");
 });
 
 describe("cli strictness and completion", () => {
