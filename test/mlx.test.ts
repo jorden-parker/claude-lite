@@ -122,7 +122,9 @@ test("mlx passes thinking off and the size's sampling as server defaults", async
   await launchMlx(home, ["35b"], dependencies);
   const server = serverCommands[0];
   const valueOf = (flag: string) => server[server.indexOf(flag) + 1];
-  expect(valueOf("--default-chat-template-kwargs")).toBe('{"enable_thinking":false}');
+  expect(valueOf("--default-chat-template-kwargs")).toBe(
+    '{"enable_thinking":false,"preserve_thinking":true}',
+  );
   expect(valueOf("--default-temperature")).toBe("0.7");
   expect(valueOf("--default-top-k")).toBe("20");
   expect(valueOf("--default-top-p")).toBe("0.8");
@@ -132,7 +134,19 @@ test("mlx passes thinking off and the size's sampling as server defaults", async
 test("mlx --think leaves thinking to the model", async () => {
   const { serverCommands, dependencies } = harness();
   await launchMlx(home, ["35b", "--think"], dependencies);
-  expect(serverCommands[0]).not.toContain("--default-chat-template-kwargs");
+  const server = serverCommands[0];
+  expect(server[server.indexOf("--default-chat-template-kwargs") + 1]).toBe(
+    '{"preserve_thinking":true}',
+  );
+});
+
+test("mlx caps the prefix trie cache by entries and memory", async () => {
+  const { serverCommands, dependencies } = harness();
+  await launchMlx(home, ["35b"], dependencies);
+  const server = serverCommands[0];
+  const valueOf = (flag: string) => server[server.indexOf(flag) + 1];
+  expect(valueOf("--prefix-trie-cache-size")).toBe("4");
+  expect(valueOf("--prefix-trie-cache-memory-mb")).toBe("8192");
 });
 
 test("mlx skips the ollama unload when OLLAMA_HOST is another machine", async () => {

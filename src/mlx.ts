@@ -21,6 +21,8 @@ const VLLM_MLX = "vllm-mlx@0.6.0";
 const PYTHON = "3.12";
 const QWEN_TOOL_PARSER = "qwen3_xml";
 const QWEN_REASONING_PARSER = "qwen3";
+const PREFIX_TRIE_CACHE_ENTRIES = "4";
+const PREFIX_TRIE_CACHE_MEMORY_MB = "8192";
 const SAMPLING = ["temperature", "top_p", "top_k", "min_p", "presence_penalty"];
 
 type MlxServer = { exited: Promise<number>; stop: () => void };
@@ -94,9 +96,16 @@ function serverCommand(size: Size, model: string): string[] {
     "--reasoning-parser",
     QWEN_REASONING_PARSER,
     "--prefix-trie-cache",
-    ...(size.thinking
-      ? []
-      : ["--default-chat-template-kwargs", JSON.stringify({ enable_thinking: false })]),
+    "--prefix-trie-cache-size",
+    PREFIX_TRIE_CACHE_ENTRIES,
+    "--prefix-trie-cache-memory-mb",
+    PREFIX_TRIE_CACHE_MEMORY_MB,
+    "--default-chat-template-kwargs",
+    JSON.stringify(
+      size.thinking
+        ? { preserve_thinking: true }
+        : { enable_thinking: false, preserve_thinking: true },
+    ),
     ...samplingFlags(size.parameters),
   ];
 }
