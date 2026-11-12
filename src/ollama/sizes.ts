@@ -17,6 +17,7 @@ export type Size = {
   default?: boolean;
   memory_gb?: number;
   mlx?: string;
+  qwen?: boolean;
 };
 
 export const PREFERRED_SIZE = "35b";

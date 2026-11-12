@@ -79,6 +79,15 @@ test("mlx downloads, unloads ollama, serves, waits, runs claude, then stops the 
   expect(server[server.indexOf("--port") + 1]).toBe(new URL(mlxUrl()).port);
 });
 
+test("mlx --qwen runs qwen against the vllm-mlx /v1 endpoint instead of claude", async () => {
+  const { calls, envs, dependencies } = harness();
+  expect(await launchMlx(home, ["35b", "--qwen", "-p", "hi"], dependencies)).toBe(0);
+  expect(calls.some((argv) => argv[0] === "claude")).toBe(false);
+  expect(calls.at(-1)).toEqual(["qwen", "--model", MODEL_35B, "-p", "hi"]);
+  expect(envs.at(-1).OPENAI_BASE_URL).toBe(`${mlxUrl()}/v1`);
+  expect(envs.at(-1).OPENAI_MODEL).toBe(MODEL_35B);
+});
+
 test("mlx reuses a server already serving the size's model and leaves it running", async () => {
   const { events, calls, dependencies } = harness({ servedReplies: [[MODEL_35B]] });
   expect(await launchMlx(home, ["35b"], dependencies)).toBe(0);

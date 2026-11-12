@@ -28,13 +28,14 @@ Older versions wrapped `claude` through an rc function and a CLAUDE.md import. R
 
 ## Launch on Ollama
 
-    claude-lite ollama [27b|35b|9b] [--print-config] [--think|--no-think] [--effort <level>] [claude args]
+    claude-lite ollama [27b|35b|9b] [--print-config] [--think|--no-think] [--qwen] [--effort <level>] [claude args]
     claude-lite ollama --print-config 27b   # print Modelfile + settings, no launch
     claude-lite ollama 35b --think -p "hi"
 
 - `--print-config`: print the Modelfile and settings instead of launching
 - `--think` / `--no-think`: turn thinking on or off for this launch
 - `--effort <level>`: thinking effort sent to the model; needs thinking on. Qwen3.8 accepts `low`, `medium` or `xhigh` (`high` and `max` fall back to `medium`); Qwen3.6 only does on/off
+- `--qwen`: run Qwen Code instead of `claude` (see [Qwen Code](#qwen-code))
 - Every other argument, such as `-p`, passes through to `claude`
 
 Pulls the base model and creates the `-cc` model when missing or when its parameters no longer match the size, loads it, then runs `claude` with settings from
@@ -61,9 +62,15 @@ Set `OLLAMA_HOST` (for example `OLLAMA_HOST=studio.local:11434 cl ollama 35b`) t
 
 Sandbox and permission mode come from `config/ollama.json`, with gitignored `config/local-ollama.json` deep-merged over it (arrays replace, e.g. `{"sandbox":{"enabled":false},"permissions":{"deny":[],"ask":[]}}`). `cl config` writes that file. The launcher adds the paths and environment variables in `config/sandbox-secrets.json` to the sandbox's `denyRead` list and denied credentials.
 
+### Qwen Code
+
+`--qwen` (on `ollama` and `mlx`) runs Qwen Code's `qwen` command after the same server and model setup, with `OPENAI_BASE_URL=<server>/v1`, `OPENAI_API_KEY=claude-lite` and `OPENAI_MODEL=<model>` set. Install it with `npm i -g @qwen-code/qwen-code`.
+
+Qwen Code runs without claude-lite's permissions, sandbox, secret denies and system prompt, and `cl bench` stays claude-only. Configure Qwen Code's own permissions and sandbox in `~/.qwen/settings.json`.
+
 ## Launch on MLX directly
 
-    claude-lite mlx [27b|35b|9b] [--print-config] [--think|--no-think] [--effort <level>] [claude args]
+    claude-lite mlx [27b|35b|9b] [--print-config] [--think|--no-think] [--qwen] [--effort <level>] [claude args]
     claude-lite mlx 35b --print-config   # print the server command + settings, no launch
 
 Runs the size's `mlx` model (an `mlx-community` 4-bit build named in `config/sizes.json`) through [vllm-mlx](https://github.com/waybarrios/vllm-mlx), which serves the Anthropic Messages API that `claude` needs, instead of Ollama. Needs [uv](https://docs.astral.sh/uv/); nothing is installed into the repo.

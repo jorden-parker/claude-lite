@@ -4,6 +4,7 @@ import { dirname, join } from "node:path";
 import { isRemoteHost, unloadModels } from "./ollama/api.ts";
 import { renderLaunchSettings, type Runner, runClaude, spawnRunner } from "./ollama/launch.ts";
 import { resolveSize, type Size } from "./ollama/sizes.ts";
+import { runQwen } from "./qwen.ts";
 
 const DEFAULT_MLX_PORT = "8435";
 
@@ -145,7 +146,7 @@ export async function launchMlx(
       `reusing the vllm-mlx already serving ${model} on ${mlxUrl()}; it keeps running after claude exits (stop it: ${STOP_HINT})`,
     );
     await unloadOllama(unload);
-    return await runClaudeIn(home, model, settings, claudeArgs, run);
+    return await runClaudeIn(home, size, model, settings, claudeArgs, run);
   }
   if (alreadyServed !== null) {
     console.error(
@@ -175,7 +176,7 @@ export async function launchMlx(
       console.error(`vllm-mlx exited before it was ready; see ${logPath()}`);
       return 1;
     }
-    return await runClaudeIn(home, model, settings, claudeArgs, run);
+    return await runClaudeIn(home, size, model, settings, claudeArgs, run);
   } finally {
     server.stop();
   }
@@ -189,11 +190,13 @@ async function unloadOllama(unload: MlxDependencies["unload"]) {
 
 async function runClaudeIn(
   home: string,
+  size: Size,
   model: string,
   settings: Record<string, any>,
   claudeArgs: string[],
   run: Runner,
 ) {
+  if (size.qwen) return await runQwen({ model, url: mlxUrl(), args: claudeArgs }, run);
   const dir = mkdtempSync(join(tmpdir(), "claude-lite-mlx-"));
   try {
     return await runClaude({ dir, home, model, settings, claudeArgs, url: mlxUrl() }, run);

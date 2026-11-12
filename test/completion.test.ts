@@ -12,7 +12,7 @@ const shells = ["zsh", "bash", "fish"] as const;
 const syntaxCheck = { zsh: ["zsh", "-n"], bash: ["bash", "-n"], fish: ["fish", "-n"] };
 
 const complete = (...typed: string[]) => nextWords(typed, words);
-const ollamaFlags = ["--think", "--no-think", "--effort"];
+const ollamaFlags = ["--think", "--no-think", "--qwen", "--effort"];
 
 describe("nextWords", () => {
   test("offers commands and help first", () => {
@@ -42,7 +42,7 @@ describe("nextWords", () => {
   });
   test("ollama drops sizes, used flags and their pair", () => {
     const next = complete("ollama", "27b", "--think");
-    expect(next).toEqual(["--print-config", "--effort"]);
+    expect(next).toEqual(["--print-config", "--qwen", "--effort"]);
   });
   test("ollama drops --effort once its value is typed", () => {
     expect(complete("ollama", "27b", "--effort", "low")).toEqual([

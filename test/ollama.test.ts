@@ -10,7 +10,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { LauncherApi } from "../src/ollama/api.ts";
+import { type LauncherApi, ollamaUrl } from "../src/ollama/api.ts";
 import { launch, loadFailureHint, type Runner } from "../src/ollama/launch.ts";
 import { modelParameters, renderModelfile } from "../src/ollama/modelfile.ts";
 import { renderSettings } from "../src/ollama/settings.ts";
@@ -226,6 +226,16 @@ test("--no-think turns thinking off and is not passed to claude", async () => {
   await launch(home, ["27b", "--no-think"], run, okApi);
   expect(calls.at(-1)).not.toContain("--no-think");
   expect(written[0].env.CLAUDE_CODE_EXTRA_BODY).toBe(disabledBody);
+});
+
+test("--qwen runs qwen against the Ollama /v1 endpoint instead of claude", async () => {
+  const { calls, envs, run } = recorder(false);
+  expect(await launch(home, ["27b", "--qwen", "-p", "hi"], run, okApi)).toBe(0);
+  const model = loadSizes(home)["27b"].model;
+  expect(calls.some((argv) => argv[0] === "claude")).toBe(false);
+  expect(calls.at(-1)).toEqual(["qwen", "--model", model, "-p", "hi"]);
+  expect(envs.at(-1).OPENAI_BASE_URL).toBe(`${ollamaUrl()}/v1`);
+  expect(envs.at(-1).OPENAI_MODEL).toBe(model);
 });
 
 test("renderSettings keeps the base sandbox and permissions unchanged", () => {

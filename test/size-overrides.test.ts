@@ -63,6 +63,12 @@ test.each([[["--effort", "low"]], [["--effort=low"]]])(
   },
 );
 
+test("--qwen sets qwen and is not passed to claude", () => {
+  const result = applyFlags(size, ["-p", "--qwen", "hi"]);
+  expect(result.size.qwen).toBe(true);
+  expect(result.claudeArgs).toEqual(["-p", "hi"]);
+});
+
 test("--effort beats CLAUDE_LITE_EFFORT", () => {
   const fromEnv = applyEnv(size, { CLAUDE_LITE_EFFORT: "xhigh" });
   expect(applyFlags(fromEnv, ["--effort", "low"]).size.effort).toBe("low");
