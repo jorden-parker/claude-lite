@@ -10,6 +10,7 @@ import {
   omlxDataDir,
   readMlxLogHealth,
   servedModelId,
+  spawnServer,
 } from "../src/mlx.ts";
 import type { Runner } from "../src/ollama/launch.ts";
 import { loadSizes, resolveSize } from "../src/ollama/sizes.ts";
@@ -422,4 +423,14 @@ test("every Qwen mlx size pairs its model with that model's MTP drafter", () => 
   const sizes = loadSizes(home);
   for (const size of Object.values(sizes).filter((candidate) => candidate.mlx?.includes("Qwen")))
     expect(size.mlx_draft).toBe(size.mlx!.replace(/-4bit$/, "-MTP-4bit"));
+});
+
+test("spawnServer keeps the server's stdout and stderr in order in one fresh log", async () => {
+  const logFile = join(mkdtempSync(join(tmpdir(), "claude-lite-mlx-log-")), "server.log");
+  writeFileSync(logFile, "previous run\n");
+  const script =
+    "echo starting; sleep 0.1; echo 'APIError: 500 out of memory' >&2; sleep 0.1; echo done";
+  const server = spawnServer(["sh", "-c", script], logFile);
+  await server.exited;
+  expect(readFileSync(logFile, "utf8")).toBe("starting\nAPIError: 500 out of memory\ndone\n");
 });

@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { closeSync, mkdirSync, mkdtempSync, openSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { isRemoteHost, unloadModels } from "./ollama/api.ts";
@@ -40,13 +40,11 @@ type MlxDependencies = {
   pollDelayMs: number;
 };
 
-function spawnServer(argv: string[], logPath: string): MlxServer {
+export function spawnServer(argv: string[], logPath: string): MlxServer {
   mkdirSync(dirname(logPath), { recursive: true });
-  const server = Bun.spawn(argv, {
-    stdin: "ignore",
-    stdout: Bun.file(logPath),
-    stderr: Bun.file(logPath),
-  });
+  const logFd = openSync(logPath, "w");
+  const server = Bun.spawn(argv, { stdin: "ignore", stdout: logFd, stderr: logFd });
+  closeSync(logFd);
   return { exited: server.exited, stop: () => server.kill() };
 }
 
