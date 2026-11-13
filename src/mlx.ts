@@ -101,7 +101,7 @@ export function readMlxLogHealth(logText: string): MlxLogHealth {
 }
 const logPath = () => mlxLogPath(homedir());
 
-type ModelSettings = Record<string, number | boolean>;
+type ModelSettings = Record<string, number | boolean | string>;
 
 function modelSettings(size: Size): ModelSettings {
   const parameters = size.parameters ?? {};
@@ -115,6 +115,7 @@ function modelSettings(size: Size): ModelSettings {
     force_sampling: true,
     enable_thinking: size.thinking,
     preserve_thinking: true,
+    ...(size.mlx_draft && { vlm_mtp_enabled: true, vlm_mtp_draft_model: size.mlx_draft }),
   };
 }
 
@@ -215,19 +216,20 @@ export async function launchMlx(
     await run(["lsof", "-nP", `-iTCP:${mlxPort()}`, "-sTCP:LISTEN"]);
     return 1;
   }
-  if (
-    (await run([
-      "uvx",
-      "--python",
-      PYTHON,
-      "--from",
-      "huggingface_hub",
-      "hf",
-      "download",
-      repo,
-    ])) !== 0
-  )
-    return 1;
+  for (const downloadRepo of [repo, size.mlx_draft].filter((name): name is string => !!name))
+    if (
+      (await run([
+        "uvx",
+        "--python",
+        PYTHON,
+        "--from",
+        "huggingface_hub",
+        "hf",
+        "download",
+        downloadRepo,
+      ])) !== 0
+    )
+      return 1;
   await unloadOllama(unload);
   writeModelSettings(settingsPath, document);
   console.log(`starting oMLX for ${model}; log: ${logPath()}`);

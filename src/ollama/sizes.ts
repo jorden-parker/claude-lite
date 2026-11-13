@@ -17,6 +17,7 @@ export type Size = {
   default?: boolean;
   memory_gb?: number;
   mlx?: string;
+  mlx_draft?: string;
   qwen?: boolean;
   opencode?: boolean;
 };

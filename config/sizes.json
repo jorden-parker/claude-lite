@@ -12,7 +12,8 @@
       "min_p": 0
     },
     "memory_gb": 16.9,
-    "mlx": "mlx-community/Qwen3.8-27B-4bit"
+    "mlx": "mlx-community/Qwen3.8-27B-4bit",
+    "mlx_draft": "mlx-community/Qwen3.8-27B-MTP-4bit"
   },
   "35b": {
     "base": "qwen3.6:35b-mlx",

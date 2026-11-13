@@ -394,3 +394,21 @@ test("readMlxLogHealth finds nothing in a clean log or an empty string", () => {
   for (const log of [clean, ""])
     expect(readMlxLogHealth(log)).toEqual({ cacheStores: 0, cacheSkipReasons: [] });
 });
+
+test("modelSettingsDocument turns on MTP speculative decoding with a size's mlx_draft drafter", () => {
+  const { size: table } = resolveSize(home, ["35b"], {});
+  const size = { ...table, mlx_draft: "mlx-community/Drafter-MTP-4bit" };
+  const document = modelSettingsDocument({ "35b": size }, size);
+  expect(document.models[SERVED_35B].vlm_mtp_enabled).toBe(true);
+  expect(document.models[SERVED_35B].vlm_mtp_draft_model).toBe("mlx-community/Drafter-MTP-4bit");
+});
+
+test("mlx downloads a size's mlx_draft drafter after its model", async () => {
+  const { calls, dependencies } = harness();
+  await launchMlx(home, ["27b"], dependencies);
+  const downloads = calls.filter((argv) => argv[0] === "uvx").map((argv) => argv.at(-1));
+  expect(downloads).toEqual([
+    "mlx-community/Qwen3.8-27B-4bit",
+    "mlx-community/Qwen3.8-27B-MTP-4bit",
+  ]);
+});
