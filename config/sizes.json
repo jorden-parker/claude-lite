@@ -28,7 +28,8 @@
       "min_p": 0
     },
     "memory_gb": 22.0,
-    "mlx": "mlx-community/Qwen3.6-35B-A3B-4bit"
+    "mlx": "mlx-community/Qwen3.6-35B-A3B-4bit",
+    "mlx_draft": "mlx-community/Qwen3.6-35B-A3B-MTP-4bit"
   },
   "9b": {
     "base": "qwen3.5:9b-mtp-q4_K_M",
@@ -43,6 +44,7 @@
       "top_p": 0.8,
       "min_p": 0
     },
-    "mlx": "mlx-community/Qwen3.5-9B-4bit"
+    "mlx": "mlx-community/Qwen3.5-9B-4bit",
+    "mlx_draft": "mlx-community/Qwen3.5-9B-MTP-4bit"
   }
 }

@@ -104,6 +104,7 @@ test("mlx downloads, unloads ollama, writes oMLX settings, serves, waits, runs c
   expect(events).toEqual([
     "probe",
     "download",
+    "download",
     "unload",
     "write",
     "serve",
@@ -332,7 +333,11 @@ test("modelSettingsDocument lets the resolved size override its table entry", ()
 
 test("modelSettingsDocument emits only the sampling keys a size sets, with force_sampling on", () => {
   const { size: table } = resolveSize(home, ["35b"], {});
-  const size = { ...table, parameters: { temperature: 0.4, num_ctx: 32768 } };
+  const size = {
+    ...table,
+    mlx_draft: undefined,
+    parameters: { temperature: 0.4, num_ctx: 32768 },
+  };
   const document = modelSettingsDocument({ "35b": size }, size);
   expect(document.models[SERVED_35B]).toEqual({
     max_context_window: size.context,
@@ -411,4 +416,10 @@ test("mlx downloads a size's mlx_draft drafter after its model", async () => {
     "mlx-community/Qwen3.8-27B-4bit",
     "mlx-community/Qwen3.8-27B-MTP-4bit",
   ]);
+});
+
+test("every Qwen mlx size pairs its model with that model's MTP drafter", () => {
+  const sizes = loadSizes(home);
+  for (const size of Object.values(sizes).filter((candidate) => candidate.mlx?.includes("Qwen")))
+    expect(size.mlx_draft).toBe(size.mlx!.replace(/-4bit$/, "-MTP-4bit"));
 });
