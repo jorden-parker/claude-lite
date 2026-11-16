@@ -60,6 +60,7 @@
       "min_p": 0
     },
     "memory_gb": 27.0,
-    "mlx": "mlx-community/flint-oQ4e"
+    "mlx": "mlx-community/flint-oQ4e",
+    "text_only": true
   }
 }

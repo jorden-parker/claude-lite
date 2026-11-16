@@ -189,7 +189,10 @@ async function launchFrom(
   if (size.qwen)
     return await runQwen({ model: size.model, url: ollamaUrl(), args: claudeArgs }, run);
   if (size.opencode)
-    return await runOpenCode({ model: size.model, url: ollamaUrl(), args: claudeArgs }, run);
+    return await runOpenCode(
+      { model: size.model, url: ollamaUrl(), args: claudeArgs, isTextOnly: size.text_only },
+      run,
+    );
   return await runClaude(
     { dir, home, model: size.model, settings, claudeArgs, url: ollamaUrl() },
     run,

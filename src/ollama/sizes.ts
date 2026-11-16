@@ -18,6 +18,7 @@ export type Size = {
   memory_gb?: number;
   mlx?: string;
   mlx_draft?: string;
+  text_only?: boolean;
   qwen?: boolean;
   opencode?: boolean;
 };

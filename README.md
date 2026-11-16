@@ -81,6 +81,8 @@ It needs OpenCode 2.0 or newer and exits 1 otherwise: older versions ignore the 
 
 The config also adds `config/opencode-instructions.md` to `instructions`, which tells OpenCode to browse with [agent-browser](https://agent-browser.dev/) (`brew install agent-browser`) instead of its web fetch tool.
 
+OpenCode assumes an unlisted model takes images. A size with `"text_only": true` in `config/sizes.json` (`40b`, Flint) is declared with text-only input, so OpenCode does not send it screenshots or attached images.
+
 It also loads `src/opencode-plugin.ts` through the config's `plugins` key. The plugin runs your [claude-kit](https://github.com/jorden-parker/claude-kit) Claude Code hooks for OpenCode's tools, using the newest installed version of each plugin under `~/.claude/plugins/cache/claude-kit`. Each script gets the same JSON on stdin that Claude Code would send, and an `exit 2` or a `deny` decision blocks the tool call with the script's message:
 
 - `edit` and `write`: `tdd-require-red`, `no-comments` and `naming-check`. The last two run before the edit and block it, where Claude Code reports them after the edit lands.

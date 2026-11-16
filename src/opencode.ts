@@ -23,7 +23,12 @@ async function openCodeMajorVersion(run: Runner): Promise<number | null> {
 }
 
 export async function runOpenCode(
-  { model, url, args }: { model: string; url: string; args: string[] },
+  {
+    model,
+    url,
+    args,
+    isTextOnly,
+  }: { model: string; url: string; args: string[]; isTextOnly?: boolean },
   run: Runner,
 ): Promise<number> {
   const major = await openCodeMajorVersion(run);
@@ -46,7 +51,11 @@ export async function runOpenCode(
         name: PROVIDER,
         package: "@opencode/ai/providers/openai-compatible",
         settings: { baseURL: `${url}/v1` },
-        models: { [model]: {} },
+        models: {
+          [model]: isTextOnly
+            ? { capabilities: { tools: true, input: ["text"], output: ["text"] } }
+            : {},
+        },
       },
     },
   };

@@ -46,6 +46,15 @@ test("opencode gets an inline provider for the served model", async () => {
   });
 });
 
+test("a text-only size tells opencode not to send images", async () => {
+  const { envs, run } = fakeOpenCode("2.1.2");
+  expect(await runOpenCode({ ...OPTIONS, isTextOnly: true }, run)).toBe(0);
+  const config = JSON.parse(envs.at(-1)?.OPENCODE_CONFIG_CONTENT ?? "");
+  expect(config.providers["claude-lite"].models[OPTIONS.model]).toEqual({
+    capabilities: { tools: true, input: ["text"], output: ["text"] },
+  });
+});
+
 test("opencode gets a private server so a background service started for another model is not reused", async () => {
   const { calls, run } = fakeOpenCode("2.2.7");
   expect(await runOpenCode(OPTIONS, run)).toBe(0);

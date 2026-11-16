@@ -313,7 +313,11 @@ async function runClaudeIn(
   run: Runner,
 ) {
   if (size.qwen) return await runQwen({ model, url: mlxUrl(), args: claudeArgs }, run);
-  if (size.opencode) return await runOpenCode({ model, url: mlxUrl(), args: claudeArgs }, run);
+  if (size.opencode)
+    return await runOpenCode(
+      { model, url: mlxUrl(), args: claudeArgs, isTextOnly: size.text_only },
+      run,
+    );
   const dir = mkdtempSync(join(tmpdir(), "claude-lite-mlx-"));
   try {
     return await runClaude({ dir, home, model, settings, claudeArgs, url: mlxUrl() }, run);
