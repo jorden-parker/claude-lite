@@ -16,6 +16,7 @@ export const COMMAND_HELP = {
   servers:
     "usage: claude-lite servers\n  lists Ollama startup sources and the port 11434 listener, and sets the server env (keep-alive, flash attention, q8 KV cache, one loaded model) with launchctl setenv; fails when more than one source would start a server or the server does not respond",
   stop: "usage: claude-lite stop\n  kills the cl mlx oMLX server and every Ollama process (Ollama.app and ollama serve); reopen Ollama before cl ollama",
+  list: "usage: claude-lite list\n  prints every size from config/sizes.json and config/local-sizes.json with its cl ollama and cl mlx start commands, the default size, the sizes that do not fit memory, and the client flags",
   config:
     "usage: claude-lite config\n  opens a screen for the Ollama and MLX settings (each size row shows which backends it reaches): the default size (auto picks one that fits memory) and every size's thinking, effort, output tokens and client (claude, qwen or opencode; written to config/local-sizes.json), and Ollama sandbox and permission mode (written to config/local-ollama.json); Enter on System prompt opens config/system-prompt.md in $VISUAL or $EDITOR\n  ↑↓ move, ←→ change, q or Esc saves, ctrl-c cancels; other keys in the local files are kept; without a terminal it prints the current values",
   "fix-servers":

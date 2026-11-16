@@ -9,6 +9,7 @@ import {
   doctor,
   fixServers,
   install,
+  list,
   logs,
   servers,
   stop,
@@ -32,6 +33,7 @@ const LIFECYCLE: Record<
   servers,
   stop,
   config,
+  list,
   "fix-servers": fixServers,
 };
 
@@ -48,7 +50,7 @@ async function runLifecycle(name: keyof typeof LIFECYCLE, extraArgs: string[], h
     return 2;
   }
   const code = await LIFECYCLE[name](process.env.HOME ?? homedir(), home);
-  if (name === "config") return code;
+  if (name === "config" || name === "list") return code;
   console.log(
     code === 0 ? `claude-lite: ${name} done` : `claude-lite: ${name} failed (exit ${code})`,
   );

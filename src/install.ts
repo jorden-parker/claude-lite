@@ -12,6 +12,7 @@ import {
   unlinkSync,
   writeFileSync,
 } from "node:fs";
+import { totalmem } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { completionPath, completionScript, END, type Shell, START } from "./completion.ts";
 import { MLX_SERVER_PATTERN, mlxLogPath, readMlxLogHealth } from "./mlx.ts";
@@ -30,7 +31,9 @@ import {
   serverStatus,
   spawnRunner,
 } from "./ollama/launch.ts";
-import { loadSizes } from "./ollama/sizes.ts";
+import { isRemoteHost } from "./ollama/api.ts";
+import { defaultSize, fittingSizes, loadSizes } from "./ollama/sizes.ts";
+import { renderLaunchList } from "./launch-list.ts";
 
 const BLOCK = new RegExp(`\\n?${START}[\\s\\S]*?${END}\\n?`);
 
@@ -424,5 +427,18 @@ export async function config(_userHome: string, home: string): Promise<number> {
   }
   const savedState = await runConfigScreen(state, home);
   if (savedState) saveConfigState(home, savedState);
+  return 0;
+}
+
+export async function list(_userHome: string, home: string): Promise<number> {
+  const sizes = loadSizes(home);
+  const memoryBytes = isRemoteHost() ? Number.POSITIVE_INFINITY : totalmem();
+  console.log(
+    renderLaunchList(sizes, {
+      defaultName: defaultSize(sizes, memoryBytes),
+      fitting: fittingSizes(sizes, memoryBytes),
+      hasSplash: Bun.which("splash") !== null,
+    }),
+  );
   return 0;
 }

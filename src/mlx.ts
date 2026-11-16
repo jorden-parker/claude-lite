@@ -211,7 +211,7 @@ async function waitUntilReady(
   }
 }
 
-const draftRepoOf = (drafted: Size, hasSplash: boolean) =>
+export const draftRepoOf = (drafted: Size, hasSplash: boolean) =>
   hasSplash && drafted.mlx_dflash ? drafted.mlx_dflash : drafted.mlx_draft;
 
 const reposToDownload = (served: (Size | undefined)[], hasSplash: boolean) =>

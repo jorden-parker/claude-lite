@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
 import { COMMAND_HELP } from "../src/help.ts";
 import { FLAGS } from "../src/ollama/size-overrides.ts";
+import { loadSizes } from "../src/ollama/sizes.ts";
 
 const runCli = (...args: string[]) => Bun.spawnSync(["bun", "src/cli.ts", ...args]);
 
@@ -86,6 +87,15 @@ describe("cli strictness and completion", () => {
     const result = runCli("help", "ollama");
     expect(result.exitCode).toBe(0);
     expect(result.stdout.toString()).toContain("usage: claude-lite ollama");
+  });
+
+  test("list prints a start command for every size", () => {
+    const result = runCli("list");
+    const stdout = result.stdout.toString();
+    expect(result.exitCode).toBe(0);
+    for (const sizeName of Object.keys(loadSizes(process.cwd())))
+      expect(stdout).toContain(`cl ollama ${sizeName}`);
+    expect(stdout).not.toContain("done");
   });
 
   test("lifecycle command rejects extra args", () => {
