@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { cpSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { cpSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -40,6 +40,8 @@ function harness({
   const written: any[] = [];
   const serverCommands: string[][] = [];
   const modelSettingsWrites: { path: string; document: any }[] = [];
+  const sessionsDir = mkdtempSync(join(tmpdir(), "claude-lite-mlx-sessions-"));
+  const sessionsDuringClaude: string[][] = [];
   let probeCount = 0;
   const servedModels = async () => {
     events.push("probe");
@@ -58,6 +60,7 @@ function harness({
     }
     if (argv[0] === "claude") {
       events.push("claude");
+      sessionsDuringClaude.push(readdirSync(sessionsDir));
       written.push(JSON.parse(readFileSync(settingsPathOf(argv), "utf8")));
       return 0;
     }
@@ -87,7 +90,10 @@ function harness({
     written,
     serverCommands,
     modelSettingsWrites,
+    sessionsDir,
+    sessionsDuringClaude,
     dependencies: {
+      sessionsDir,
       run,
       startServer,
       unload,
@@ -196,6 +202,29 @@ test("mlx reuses a server already serving the size's model and leaves it running
   expect(events).toEqual(["probe", "unload", "claude"]);
   expect(calls.at(-1)![0]).toBe("claude");
   expect(modelSettingsWrites).toEqual([]);
+});
+
+test("mlx leaves the server running while another live session uses it", async () => {
+  const { events, sessionsDir, dependencies } = harness();
+  writeFileSync(join(sessionsDir, String(process.ppid)), "");
+  expect(await launchMlx(home, ["35b"], dependencies)).toBe(0);
+  expect(events.at(-1)).toBe("claude");
+});
+
+test("mlx stops the server when the only other session file is from a dead process", async () => {
+  const { events, sessionsDir, dependencies } = harness();
+  writeFileSync(join(sessionsDir, "2147483646"), "");
+  expect(await launchMlx(home, ["35b"], dependencies)).toBe(0);
+  expect(events.at(-1)).toBe("stop");
+});
+
+test("mlx records its session while claude runs, on a reused server too, and clears it after", async () => {
+  const { sessionsDir, sessionsDuringClaude, dependencies } = harness({
+    servedReplies: [[SERVED_35B]],
+  });
+  expect(await launchMlx(home, ["35b"], dependencies)).toBe(0);
+  expect(sessionsDuringClaude).toEqual([[String(process.pid)]]);
+  expect(readdirSync(sessionsDir)).toEqual([]);
 });
 
 test("mlx names what holds the port when it serves something else", async () => {

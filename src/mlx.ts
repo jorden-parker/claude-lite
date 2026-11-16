@@ -1,4 +1,13 @@
-import { closeSync, mkdirSync, mkdtempSync, openSync, rmSync, writeFileSync } from "node:fs";
+import {
+  closeSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  openSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { isRemoteHost, unloadModels } from "./ollama/api.ts";
@@ -37,6 +46,7 @@ type MlxDependencies = {
   servedModels: () => Promise<string[] | null>;
   isOmlxInstalled: () => boolean;
   writeModelSettings: (path: string, document: unknown) => void;
+  sessionsDir: string;
   pollDelayMs: number;
 };
 
@@ -68,6 +78,35 @@ function writeModelSettingsFile(path: string, document: unknown) {
   writeFileSync(path, JSON.stringify(document, null, 2));
 }
 
+function isProcessAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function countOtherLiveSessions(sessionsDir: string): number {
+  if (!existsSync(sessionsDir)) return 0;
+  return readdirSync(sessionsDir)
+    .map(Number)
+    .filter((pid) => pid !== process.pid && isProcessAlive(pid)).length;
+}
+
+async function withSessionRecorded(sessionsDir: string, runSession: () => Promise<number>) {
+  mkdirSync(sessionsDir, { recursive: true });
+  const sessionFile = join(sessionsDir, String(process.pid));
+  writeFileSync(sessionFile, "");
+  try {
+    return await runSession();
+  } finally {
+    rmSync(sessionFile, { force: true });
+  }
+}
+
+export const omlxDataDir = (userHome: string) => join(userHome, ".cache", "claude-lite", "omlx");
+
 const DEFAULTS: MlxDependencies = {
   run: spawnRunner,
   startServer: spawnServer,
@@ -75,13 +114,12 @@ const DEFAULTS: MlxDependencies = {
   servedModels: fetchServedModels,
   isOmlxInstalled: () => Bun.which("omlx") !== null,
   writeModelSettings: writeModelSettingsFile,
+  sessionsDir: join(omlxDataDir(homedir()), "sessions"),
   pollDelayMs: 1000,
 };
 
 export const mlxLogPath = (userHome: string) =>
   join(userHome, ".cache", "claude-lite", "mlx-server.log");
-
-export const omlxDataDir = (userHome: string) => join(userHome, ".cache", "claude-lite", "omlx");
 
 export const servedModelId = (repo: string) => repo.replaceAll("/", "--");
 
@@ -170,6 +208,7 @@ export async function launchMlx(
     servedModels,
     isOmlxInstalled,
     writeModelSettings,
+    sessionsDir,
     pollDelayMs,
   } = { ...DEFAULTS, ...overrides };
   const isPrintOnly = args.includes("--print-config");
@@ -205,7 +244,9 @@ export async function launchMlx(
       `reusing the oMLX already serving ${model} on ${mlxUrl()}; it keeps running after claude exits (stop it: ${STOP_HINT})`,
     );
     await unloadOllama(unload);
-    return await runClaudeIn(home, size, model, settings, claudeArgs, run);
+    return await withSessionRecorded(sessionsDir, () =>
+      runClaudeIn(home, size, model, settings, claudeArgs, run),
+    );
   }
   if (alreadyServed !== null) {
     console.error(
@@ -244,9 +285,16 @@ export async function launchMlx(
       );
       return 1;
     }
-    return await runClaudeIn(home, size, model, settings, claudeArgs, run);
+    return await withSessionRecorded(sessionsDir, () =>
+      runClaudeIn(home, size, model, settings, claudeArgs, run),
+    );
   } finally {
-    server.stop();
+    const otherSessions = countOtherLiveSessions(sessionsDir);
+    if (otherSessions === 0) server.stop();
+    else
+      console.log(
+        `leaving oMLX running for ${otherSessions} other cl mlx session(s) (stop it: ${STOP_HINT})`,
+      );
   }
 }
 
