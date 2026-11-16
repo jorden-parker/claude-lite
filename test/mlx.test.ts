@@ -244,8 +244,8 @@ test("mlx names what holds the port when it serves something else", async () => 
   }
   expect(events).toEqual(["probe", "lsof"]);
   expect(calls[0]).toContain(`-iTCP:${new URL(mlxUrl()).port}`);
-  expect(errors[0]).toContain("other-model");
-  expect(errors[0]).toContain(SERVED_35B);
+  expect(errors.at(-1)).toContain("other-model");
+  expect(errors.at(-1)).toContain(SERVED_35B);
 });
 
 test("mlx skips claude when the server exits before it is ready", async () => {
@@ -267,8 +267,8 @@ test("mlx returns 1 and stops the server when oMLX does not list the served id",
   }
   expect(events).not.toContain("claude");
   expect(events.at(-1)).toBe("stop");
-  expect(errors[0]).toContain(`oMLX does not list ${SERVED_35B}`);
-  expect(errors[0]).toContain(mlxLogPath(homedir()));
+  expect(errors.at(-1)).toContain(`oMLX does not list ${SERVED_35B}`);
+  expect(errors.at(-1)).toContain(mlxLogPath(homedir()));
 });
 
 test("mlx returns 1 without downloading or starting anything when omlx is not installed", async () => {
@@ -287,7 +287,7 @@ test("mlx returns 1 without downloading or starting anything when omlx is not in
   expect(calls).toEqual([]);
   expect(serverCommands).toEqual([]);
   expect(modelSettingsWrites).toEqual([]);
-  expect(errors[0]).toContain("brew install jundot/omlx/omlx");
+  expect(errors.at(-1)).toContain("brew install jundot/omlx/omlx");
 });
 
 test("mlx skips the ollama unload when OLLAMA_HOST is another machine", async () => {
@@ -387,7 +387,7 @@ test("serve fails and names the port holder when something else serves it", asyn
   }
   expect(events).toContain("lsof");
   expect(serverCommands).toEqual([]);
-  expect(errors[0]).toContain("already serves other-model");
+  expect(errors.at(-1)).toContain("already serves other-model");
 });
 
 test("serve returns 1 without downloading or starting anything when omlx is not installed", async () => {
@@ -402,7 +402,7 @@ test("serve returns 1 without downloading or starting anything when omlx is not 
   }
   expect(calls).toEqual([]);
   expect(serverCommands).toEqual([]);
-  expect(errors[0]).toContain("brew install jundot/omlx/omlx");
+  expect(errors.at(-1)).toContain("brew install jundot/omlx/omlx");
 });
 
 test("serve returns 1 when oMLX exits before it lists the model", async () => {
@@ -416,7 +416,7 @@ test("serve returns 1 when oMLX exits before it lists the model", async () => {
     console.error = original;
   }
   expect(events).not.toContain("claude");
-  expect(errors[0]).toContain("oMLX exited before it was ready");
+  expect(errors.at(-1)).toContain("oMLX exited before it was ready");
 });
 
 test("serve --print-config prints the server command and model settings without running", async () => {
@@ -620,9 +620,30 @@ test("modelSettingsDocument keeps the MTP drafter and oMLX's own engine when Spl
 
 test("modelSettingsDocument leaves a size without mlx_dflash on oMLX's own engine with Splash installed", () => {
   const sizes = loadSizes(home);
-  const settings = modelSettingsDocument(sizes, sizes["35b"], true).models[SERVED_35B];
+  const settings = modelSettingsDocument(sizes, sizes["9b"], true).models[
+    servedModelId(sizes["9b"].mlx!)
+  ];
   expect(settings.external_engine).toBeUndefined();
   expect(settings.vlm_mtp_enabled).toBe(true);
+});
+
+const DFLASH_35B = "incoai/Qwen3.6-35B-A3B-DFlash2";
+
+test("the 35b size names the DFlash2 draft Splash pairs with Qwen3.6 35B-A3B", () => {
+  expect(loadSizes(home)["35b"].mlx_dflash).toBe(DFLASH_35B);
+});
+
+test("mlx 35b with Splash is served through Splash and downloads its DFlash2 draft", async () => {
+  const { calls, modelSettingsWrites, dependencies } = harness({
+    hasSplash: true,
+    servedReplies: [null, [SERVED_35B]],
+  });
+  expect(await launchMlx(home, ["35b"], dependencies)).toBe(0);
+  const downloads = calls.filter((argv) => argv[0] === "uvx").map((argv) => argv.at(-1));
+  expect(downloads).toEqual([MODEL_35B, DFLASH_35B]);
+  const settings = modelSettingsWrites[0].document.models[SERVED_35B];
+  expect(settings.external_engine).toBe("splash");
+  expect(settings.dflash_draft_model).toBe("incoai--Qwen3.6-35B-A3B-DFlash2");
 });
 
 test("mlx with Splash downloads the DFlash2 draft instead of the MTP drafter", async () => {
