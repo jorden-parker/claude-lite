@@ -6,6 +6,12 @@ import { hasParameters, renderModelfile } from "./modelfile.ts";
 import { renderSettings } from "./settings.ts";
 import { fittingSizes, loadSizes, resolveSize, type Size } from "./sizes.ts";
 import { withJsonOverlay } from "../json-overlay.ts";
+import {
+  IMAGE_READER,
+  IMAGE_READER_DESCRIPTION,
+  IMAGE_READER_HANDOFF,
+  IMAGE_READER_PROMPT,
+} from "../image-reader.ts";
 import { withSharedSecrets } from "../sandbox-secrets.ts";
 import { runOpenCode } from "../opencode.ts";
 import { runQwen } from "../qwen.ts";
@@ -17,6 +23,30 @@ export const spawnRunner: Runner = async (argv, env) =>
     .exited;
 
 const TOOLS = "Bash,Read,Edit,Write,Skill";
+const AGENT_TOOL = "Agent";
+
+const withImageReaderAllowed = (settings: Record<string, any>, visionModel: string) => ({
+  ...settings,
+  availableModels: [...(settings.availableModels ?? []), visionModel],
+  permissions: {
+    ...settings.permissions,
+    deny: (settings.permissions?.deny ?? []).filter((tool: string) => tool !== AGENT_TOOL),
+  },
+});
+
+const imageReaderArgs = (visionModel: string) => [
+  "--agents",
+  JSON.stringify({
+    [IMAGE_READER]: {
+      description: IMAGE_READER_DESCRIPTION,
+      prompt: IMAGE_READER_PROMPT,
+      tools: ["Read"],
+      model: visionModel,
+    },
+  }),
+  "--append-system-prompt",
+  IMAGE_READER_HANDOFF,
+];
 
 export const MINIMUM_OLLAMA = "0.40.12";
 
@@ -186,18 +216,14 @@ async function launchFrom(
     console.error(loadFailureHint(home, name));
     return 1;
   }
-  if (size.qwen)
-    return await runQwen({ model: size.model, url: ollamaUrl(), args: claudeArgs }, run);
-  if (size.opencode) {
-    const vision = size.vision_size ? buildPlan(home, [size.vision_size]) : undefined;
-    if (vision && !(await ensureModel(vision.size, vision.modelfile, dir, run, api))) return 1;
-    return await runOpenCode(
-      { model: size.model, url: ollamaUrl(), args: claudeArgs, visionModel: vision?.size.model },
-      run,
-    );
-  }
+  const vision = size.vision_size ? buildPlan(home, [size.vision_size]) : undefined;
+  if (vision && !(await ensureModel(vision.size, vision.modelfile, dir, run, api))) return 1;
+  const visionModel = vision?.size.model;
+  const client = { model: size.model, url: ollamaUrl(), args: claudeArgs, visionModel };
+  if (size.qwen) return await runQwen(client, run);
+  if (size.opencode) return await runOpenCode(client, run);
   return await runClaude(
-    { dir, home, model: size.model, settings, claudeArgs, url: ollamaUrl() },
+    { dir, home, model: size.model, settings, claudeArgs, url: ollamaUrl(), visionModel },
     run,
   );
 }
@@ -209,14 +235,16 @@ type ClaudeLaunch = {
   settings: Record<string, any>;
   claudeArgs: string[];
   url: string;
+  visionModel?: string;
 };
 
 export async function runClaude(
-  { dir, home, model, settings, claudeArgs, url }: ClaudeLaunch,
+  { dir, home, model, settings, claudeArgs, url, visionModel }: ClaudeLaunch,
   run: Runner,
 ): Promise<number> {
   const settingsPath = join(dir, "settings.json");
-  writeFileSync(settingsPath, JSON.stringify(settings, null, 2), { mode: 0o600 });
+  const launchSettings = visionModel ? withImageReaderAllowed(settings, visionModel) : settings;
+  writeFileSync(settingsPath, JSON.stringify(launchSettings, null, 2), { mode: 0o600 });
   const env: Record<string, string | undefined> = { ...process.env, ANTHROPIC_BASE_URL: url };
   delete env.ANTHROPIC_API_KEY;
   return await run(
@@ -229,8 +257,9 @@ export async function runClaude(
       "--model",
       model,
       "--tools",
-      TOOLS,
+      visionModel ? `${TOOLS},${AGENT_TOOL}` : TOOLS,
       "--strict-mcp-config",
+      ...(visionModel ? imageReaderArgs(visionModel) : []),
       ...claudeArgs,
     ],
     env,

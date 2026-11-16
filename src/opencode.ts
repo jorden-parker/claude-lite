@@ -2,11 +2,11 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { liteHome } from "./home.ts";
+import { IMAGE_READER, IMAGE_READER_DESCRIPTION, IMAGE_READER_PROMPT } from "./image-reader.ts";
 import type { Runner } from "./ollama/launch.ts";
 
 const PROVIDER = "claude-lite";
 const MINIMUM_OPENCODE_MAJOR = 2;
-const IMAGE_READER = "image-reader";
 
 async function openCodeMajorVersion(run: Runner): Promise<number | null> {
   const dir = mkdtempSync(join(tmpdir(), "claude-lite-opencode-"));
@@ -65,12 +65,10 @@ export async function runOpenCode(
     ...(visionModel && {
       agents: {
         [IMAGE_READER]: {
-          description:
-            "Reads an image file (screenshot, mock-up, diagram, photo) and describes it. You cannot read images yourself: give this agent the file path and what you need to know about the image.",
+          description: IMAGE_READER_DESCRIPTION,
           mode: "subagent",
           model: `${PROVIDER}/${visionModel}`,
-          system:
-            "Read the image file you are given and answer the question about it. Describe layout, text, colors and visible defects precisely. Do not edit files.",
+          system: IMAGE_READER_PROMPT,
         },
       },
     }),

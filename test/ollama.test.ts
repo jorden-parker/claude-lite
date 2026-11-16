@@ -337,3 +337,25 @@ test("--opencode on a size with a vision size creates that size's model and hand
   const config = JSON.parse(envs.at(-1).OPENCODE_CONFIG_CONTENT);
   expect(config.agents["image-reader"].model).toBe("claude-lite/qwen3.5-9b-mtp-cc");
 });
+
+test("a size with a vision size on claude creates that size's model and defines the image-reader on it", async () => {
+  const { calls, run } = recorder(false);
+  expect(await launch(home, ["40b"], run, okApi)).toBe(0);
+  expect(calls).toContainEqual(["ollama", "show", "qwen3.5-9b-mtp-cc"]);
+  const claude = calls.find((argv) => argv[0] === "claude")!;
+  const agents = JSON.parse(claude[claude.indexOf("--agents") + 1]);
+  expect(agents["image-reader"].model).toBe("qwen3.5-9b-mtp-cc");
+});
+
+test("--qwen on a size with a vision size creates that size's model and points qwen at the image-reader", async () => {
+  const previous = process.env.HOME;
+  process.env.HOME = mkdtempSync(join(tmpdir(), "claude-lite-home-"));
+  try {
+    const { calls, run } = recorder(false);
+    expect(await launch(home, ["40b", "--qwen"], run, okApi)).toBe(0);
+    expect(calls).toContainEqual(["ollama", "show", "qwen3.5-9b-mtp-cc"]);
+    expect(calls.at(-1)).toContain("--append-system-prompt");
+  } finally {
+    process.env.HOME = previous;
+  }
+});

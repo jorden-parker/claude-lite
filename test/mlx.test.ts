@@ -27,12 +27,14 @@ type HarnessOptions = {
   servedReplies?: (string[] | null)[];
   doesServerDie?: boolean;
   hasOmlx?: boolean;
+  hasSplash?: boolean;
 };
 
 function harness({
   servedReplies = [null, [SERVED_35B]],
   doesServerDie = false,
   hasOmlx = true,
+  hasSplash = false,
 }: HarnessOptions = {}) {
   const events: string[] = [];
   const calls: string[][] = [];
@@ -99,6 +101,7 @@ function harness({
       unload,
       servedModels,
       isOmlxInstalled: () => hasOmlx,
+      isSplashInstalled: () => hasSplash,
       writeModelSettings,
       pollDelayMs: 0,
     },
@@ -472,4 +475,100 @@ test("mlx --opencode on a size with a vision size downloads that size's model fo
   expect(calls.map((argv) => argv.at(-1))).toContain("mlx-community/Qwen3.5-9B-4bit");
   const config = JSON.parse(envs.at(-1).OPENCODE_CONFIG_CONTENT);
   expect(config.agents["image-reader"].model).toBe("claude-lite/mlx-community--Qwen3.5-9B-4bit");
+});
+
+const MODEL_27B = "mlx-community/Qwen3.8-27B-4bit";
+const SERVED_27B = "mlx-community--Qwen3.8-27B-4bit";
+const DFLASH_27B = "incoai/Qwen3.8-27B-DFlash2";
+
+test("the 27b size names the DFlash2 draft Splash pairs with Qwen3.8 27B", () => {
+  expect(loadSizes(home)["27b"].mlx_dflash).toBe(DFLASH_27B);
+});
+
+test("modelSettingsDocument serves a size with mlx_dflash through Splash when Splash is installed", () => {
+  const sizes = loadSizes(home);
+  const settings = modelSettingsDocument(sizes, sizes["27b"], true).models[SERVED_27B];
+  expect(settings.external_engine).toBe("splash");
+  expect(settings.dflash_draft_model).toBe("incoai--Qwen3.8-27B-DFlash2");
+  expect(settings.vlm_mtp_enabled).toBeUndefined();
+});
+
+test("modelSettingsDocument keeps the MTP drafter and oMLX's own engine when Splash is missing", () => {
+  const sizes = loadSizes(home);
+  const settings = modelSettingsDocument(sizes, sizes["27b"], false).models[SERVED_27B];
+  expect(settings.external_engine).toBeUndefined();
+  expect(settings.vlm_mtp_enabled).toBe(true);
+});
+
+test("modelSettingsDocument leaves a size without mlx_dflash on oMLX's own engine with Splash installed", () => {
+  const sizes = loadSizes(home);
+  const settings = modelSettingsDocument(sizes, sizes["35b"], true).models[SERVED_35B];
+  expect(settings.external_engine).toBeUndefined();
+  expect(settings.vlm_mtp_enabled).toBe(true);
+});
+
+test("mlx with Splash downloads the DFlash2 draft instead of the MTP drafter", async () => {
+  const { calls, dependencies } = harness({ hasSplash: true, servedReplies: [null, [SERVED_27B]] });
+  expect(await launchMlx(home, ["27b"], dependencies)).toBe(0);
+  const downloads = calls.filter((argv) => argv[0] === "uvx").map((argv) => argv.at(-1));
+  expect(downloads).toEqual([MODEL_27B, DFLASH_27B]);
+});
+
+test("claude, qwen and opencode launch 27b on the same server command and model settings", async () => {
+  const launches = [];
+  for (const clientFlags of [[], ["--qwen"], ["--opencode"]]) {
+    const { serverCommands, modelSettingsWrites, dependencies } = harness({
+      hasSplash: true,
+      servedReplies: [null, [SERVED_27B]],
+    });
+    expect(await launchMlx(home, ["27b", ...clientFlags], dependencies)).toBe(0);
+    launches.push({ command: serverCommands[0], settings: modelSettingsWrites[0].document });
+  }
+  expect(launches[1]).toEqual(launches[0]);
+  expect(launches[2]).toEqual(launches[0]);
+  expect(launches[0].settings.models[SERVED_27B].external_engine).toBe("splash");
+});
+
+const SERVED_FLINT = "mlx-community--flint-oQ4e";
+const SERVED_VISION = "mlx-community--Qwen3.5-9B-4bit";
+
+async function withTemporaryHome<Result>(runWithHome: (userHome: string) => Promise<Result>) {
+  const previous = process.env.HOME;
+  const userHome = mkdtempSync(join(tmpdir(), "claude-lite-home-"));
+  process.env.HOME = userHome;
+  try {
+    return await runWithHome(userHome);
+  } finally {
+    process.env.HOME = previous;
+  }
+}
+
+test("mlx 40b on claude downloads the vision model and defines the image-reader on it", async () => {
+  const { calls, dependencies } = harness({ servedReplies: [null, [SERVED_FLINT]] });
+  expect(await launchMlx(home, ["40b"], dependencies)).toBe(0);
+  expect(calls.map((argv) => argv.at(-1))).toContain("mlx-community/Qwen3.5-9B-4bit");
+  const claude = calls.find((argv) => argv[0] === "claude")!;
+  const agents = JSON.parse(claude[claude.indexOf("--agents") + 1]);
+  expect(agents["image-reader"].model).toBe(SERVED_VISION);
+});
+
+test("mlx 40b --qwen downloads the vision model and writes the image-reader on it", async () => {
+  await withTemporaryHome(async (userHome) => {
+    const { calls, dependencies } = harness({ servedReplies: [null, [SERVED_FLINT]] });
+    let agentFile = "";
+    const run: Runner = async (argv, env) => {
+      if (argv[0] === "qwen")
+        agentFile = readFileSync(join(userHome, ".qwen", "agents", "image-reader.md"), "utf8");
+      return await dependencies.run(argv, env);
+    };
+    expect(await launchMlx(home, ["40b", "--qwen"], { ...dependencies, run })).toBe(0);
+    expect(calls.map((argv) => argv.at(-1))).toContain("mlx-community/Qwen3.5-9B-4bit");
+    expect(agentFile).toContain(`model: ${SERVED_VISION}`);
+  });
+});
+
+test("mlx 27b defines no image-reader because the model reads images itself", async () => {
+  const { calls, dependencies } = harness({ servedReplies: [null, [SERVED_27B]] });
+  expect(await launchMlx(home, ["27b"], dependencies)).toBe(0);
+  expect(calls.find((argv) => argv[0] === "claude")).not.toContain("--agents");
 });

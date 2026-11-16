@@ -31,6 +31,8 @@ const STOP_HINT = "cl stop";
 const PYTHON = "3.12";
 const OMLX_INSTALL_HINT =
   "brew tap jundot/omlx https://github.com/jundot/omlx && brew install jundot/omlx/omlx --with-custom-kernel (needs full Xcode; without it: brew install jundot/omlx/omlx)";
+const SPLASH_ENGINE = "splash";
+const SPLASH_INSTALL_HINT = "brew install incoai/tap/splash";
 const SERVER_SSD_CACHE = "20GB";
 const MEMORY_GUARD_TIER = "aggressive";
 const SAMPLING = ["temperature", "top_p", "top_k", "min_p", "presence_penalty"];
@@ -45,6 +47,7 @@ type MlxDependencies = {
   unload: () => Promise<string[]>;
   servedModels: () => Promise<string[] | null>;
   isOmlxInstalled: () => boolean;
+  isSplashInstalled: () => boolean;
   writeModelSettings: (path: string, document: unknown) => void;
   sessionsDir: string;
   pollDelayMs: number;
@@ -113,6 +116,7 @@ const DEFAULTS: MlxDependencies = {
   unload: unloadModels,
   servedModels: fetchServedModels,
   isOmlxInstalled: () => Bun.which("omlx") !== null,
+  isSplashInstalled: () => Bun.which(SPLASH_ENGINE) !== null,
   writeModelSettings: writeModelSettingsFile,
   sessionsDir: join(omlxDataDir(homedir()), "sessions"),
   pollDelayMs: 1000,
@@ -139,7 +143,14 @@ const logPath = () => mlxLogPath(homedir());
 
 type ModelSettings = Record<string, number | boolean | string>;
 
-function modelSettings(size: Size): ModelSettings {
+const speculativeDecoding = (size: Size, hasSplash: boolean): ModelSettings => {
+  if (hasSplash && size.mlx_dflash)
+    return { external_engine: SPLASH_ENGINE, dflash_draft_model: servedModelId(size.mlx_dflash) };
+  if (size.mlx_draft) return { vlm_mtp_enabled: true, vlm_mtp_draft_model: size.mlx_draft };
+  return {};
+};
+
+function modelSettings(size: Size, hasSplash: boolean): ModelSettings {
   const parameters = size.parameters ?? {};
   const sampling = Object.fromEntries(
     Object.entries(parameters).filter(([name]) => SAMPLING.includes(name)),
@@ -151,14 +162,18 @@ function modelSettings(size: Size): ModelSettings {
     force_sampling: true,
     enable_thinking: size.thinking,
     preserve_thinking: true,
-    ...(size.mlx_draft && { vlm_mtp_enabled: true, vlm_mtp_draft_model: size.mlx_draft }),
+    ...speculativeDecoding(size, hasSplash),
   };
 }
 
-export function modelSettingsDocument(sizes: Record<string, Size>, launched: Size) {
+export function modelSettingsDocument(
+  sizes: Record<string, Size>,
+  launched: Size,
+  hasSplash = false,
+) {
   const models: Record<string, ModelSettings> = {};
   for (const size of [...Object.values(sizes), launched])
-    if (size.mlx) models[servedModelId(size.mlx)] = modelSettings(size);
+    if (size.mlx) models[servedModelId(size.mlx)] = modelSettings(size, hasSplash);
   return { version: 1, models };
 }
 
@@ -196,6 +211,22 @@ async function waitUntilReady(
   }
 }
 
+const draftRepoOf = (drafted: Size, hasSplash: boolean) =>
+  hasSplash && drafted.mlx_dflash ? drafted.mlx_dflash : drafted.mlx_draft;
+
+const reposToDownload = (served: (Size | undefined)[], hasSplash: boolean) =>
+  served
+    .filter((size): size is Size => size !== undefined)
+    .flatMap((size) => [size.mlx, draftRepoOf(size, hasSplash)])
+    .filter((repo): repo is string => repo !== undefined);
+
+function warnWithoutSplash(name: string, size: Size, hasSplash: boolean) {
+  if (size.mlx_dflash && !hasSplash)
+    console.error(
+      `claude-lite: splash is not installed, so ${name} runs on oMLX's slower MTP engine; install it with ${SPLASH_INSTALL_HINT}`,
+    );
+}
+
 export async function launchMlx(
   home: string,
   args: string[],
@@ -207,6 +238,7 @@ export async function launchMlx(
     unload,
     servedModels,
     isOmlxInstalled,
+    isSplashInstalled,
     writeModelSettings,
     sessionsDir,
     pollDelayMs,
@@ -225,10 +257,11 @@ export async function launchMlx(
   const dataDir = omlxDataDir(homedir());
   const settingsPath = join(dataDir, "model_settings.json");
   const sizes = loadSizes(home);
-  const visionSize = size.opencode && size.vision_size ? sizes[size.vision_size] : undefined;
+  const visionSize = size.vision_size ? sizes[size.vision_size] : undefined;
   const visionRepo = visionSize?.mlx;
-  const visionDraftRepo = visionSize?.mlx_draft;
-  const document = modelSettingsDocument(sizes, size);
+  const hasSplash = isSplashInstalled();
+  warnWithoutSplash(name, size, hasSplash);
+  const document = modelSettingsDocument(sizes, size, hasSplash);
   const settings = renderLaunchSettings(home, { ...size, model }, mlxUrl());
   const command = serverCommand(dataDir);
   if (isPrintOnly) {
@@ -259,9 +292,7 @@ export async function launchMlx(
     await run(["lsof", "-nP", `-iTCP:${mlxPort()}`, "-sTCP:LISTEN"]);
     return 1;
   }
-  for (const downloadRepo of [repo, size.mlx_draft, visionRepo, visionDraftRepo].filter(
-    (name): name is string => !!name,
-  ))
+  for (const downloadRepo of reposToDownload([size, visionSize], hasSplash))
     if (
       (await run([
         "uvx",
@@ -319,20 +350,16 @@ async function runClaudeIn(
   run: Runner,
   visionRepo?: string,
 ) {
-  if (size.qwen) return await runQwen({ model, url: mlxUrl(), args: claudeArgs }, run);
-  if (size.opencode)
-    return await runOpenCode(
-      {
-        model,
-        url: mlxUrl(),
-        args: claudeArgs,
-        visionModel: visionRepo && servedModelId(visionRepo),
-      },
-      run,
-    );
+  const visionModel = visionRepo && servedModelId(visionRepo);
+  const client = { model, url: mlxUrl(), args: claudeArgs, visionModel };
+  if (size.qwen) return await runQwen(client, run);
+  if (size.opencode) return await runOpenCode(client, run);
   const dir = mkdtempSync(join(tmpdir(), "claude-lite-mlx-"));
   try {
-    return await runClaude({ dir, home, model, settings, claudeArgs, url: mlxUrl() }, run);
+    return await runClaude(
+      { dir, home, model, settings, claudeArgs, url: mlxUrl(), visionModel },
+      run,
+    );
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

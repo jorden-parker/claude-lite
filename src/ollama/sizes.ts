@@ -18,6 +18,7 @@ export type Size = {
   memory_gb?: number;
   mlx?: string;
   mlx_draft?: string;
+  mlx_dflash?: string;
   vision_size?: string;
   qwen?: boolean;
   opencode?: boolean;
