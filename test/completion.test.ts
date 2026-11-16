@@ -37,6 +37,11 @@ describe("nextWords", () => {
     expect(complete("mlx")).toEqual([...words.sizes, "--help"]);
     expect(complete("mlx", "27b")).toEqual(["--print-config", ...ollamaFlags]);
   });
+  test("serve offers sizes first, then only --print-config", () => {
+    expect(complete("serve")).toEqual([...words.sizes, "--help"]);
+    expect(complete("serve", "27b")).toEqual(["--print-config"]);
+    expect(complete("serve", "27b", "--print-config")).toEqual([]);
+  });
   test("ollama offers flags after a size", () => {
     expect(complete("ollama", "27b")).toEqual(["--print-config", ...ollamaFlags]);
   });

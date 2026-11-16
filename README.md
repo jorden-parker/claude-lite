@@ -19,6 +19,7 @@ An Ollama launcher for Claude Code, in TypeScript and Bun. Hooks, rules and styl
     cl config                    # screen for the default size, sandbox, permission mode, system prompt, and every size's thinking, effort, output tokens and client
     cl ollama [size]             # launches Claude Code on a local model (see below)
     cl mlx [size]                # same, but the model runs on oMLX instead of Ollama
+    cl serve [size]              # starts the oMLX server on port 8435 without claude and stays up until Ctrl-C
     cl bench [size]              # measures a size's model: tool-use quality on fixed tasks, tokens/s, load time
     cl <command> --help          # usage for one command
 
@@ -98,6 +99,7 @@ Like Qwen Code, OpenCode runs without claude-lite's permissions, sandbox, secret
 
     claude-lite mlx [27b|35b|9b|40b] [--print-config] [--think|--no-think] [--qwen|--opencode] [--effort <level>] [claude args]
     claude-lite mlx 35b --print-config   # print the server command, model settings and settings, no launch
+    claude-lite serve [27b|35b|9b|40b] [--print-config]
 
 Runs the size's `mlx` model (an `mlx-community` 4-bit build named in `config/sizes.json`) through [oMLX](https://github.com/jundot/omlx) 0.7.3 or newer, which serves the Anthropic Messages API that `claude` needs, instead of Ollama. oMLX is not on PyPI, so install it with Homebrew (or the macOS app, as long as it puts `omlx` on PATH):
 
@@ -113,6 +115,8 @@ Check that a Homebrew install has the kernels with `/opt/homebrew/opt/omlx/libex
 4. Writes `~/.cache/claude-lite/omlx/model_settings.json` with an entry for every mlx size, keyed by that id: its context, output tokens and sampling, with `force_sampling` on so the size's sampling wins over what `claude` sends, and thinking from the size or `--think`/`--no-think`. A size with `mlx_draft` (each size uses its model's `-MTP-4bit` drafter, for example `mlx-community/Qwen3.8-27B-MTP-4bit`, 0.3 GB) also gets `vlm_mtp_enabled` and `vlm_mtp_draft_model`, so oMLX drafts tokens with that multi-token-prediction head and the model only verifies them: same output, faster decode. oMLX logs `VLM MTP drafter loaded` when it takes, and ignores the setting with a warning when it can't load the drafter. A size with `mlx_dflash` (the `27b`, with `incoai/Qwen3.8-27B-DFlash2`, 3.8 GB) is served through [Splash](https://github.com/incoai/splash) instead when `splash` is on PATH (`brew install incoai/tap/splash`, 1.3.0 or newer, M3 or later): its entry gets `external_engine: "splash"` and `dflash_draft_model` and no MTP keys, because oMLX's MTP settings do not apply while Splash serves the model. oMLX then starts `splash serve` itself and forwards requests to it, so `claude`, `--qwen` and `--opencode` keep the same port and model id. Without `splash` the launcher says so and the size stays on the MTP drafter. oMLX does not fall back on its own: if Splash is installed but cannot serve the model (too old, or the draft is missing), the first request fails with oMLX's reason. The file is rewritten on every start, so edits to it or in the oMLX admin UI are overwritten; change the size in `config/sizes.json` or `config/local-sizes.json` instead.
 5. Starts `omlx serve --base-path ~/.cache/claude-lite/omlx --host 127.0.0.1 --port 8435 --paged-ssd-cache-max-size 20GB --memory-guard aggressive` in the background. The data dir holds the settings and the SSD prompt cache, capped at 20 GB. `aggressive` keeps only about 2% of RAM free for other apps and may compress half their memory, so the 35b fits under oMLX's memory ceiling; the default `balanced` tier refuses it when other apps hold a lot of RAM. The server log is `~/.cache/claude-lite/mlx-server.log`.
 6. Waits for `/v1/models` to list the id (if it does not, the model is not an MLX model in the Hugging Face cache and the launch stops), runs `claude` with the same settings, system prompt and tools as `cl ollama`, and stops the server when `claude` exits, unless another `cl mlx` session still uses it (each session leaves its pid in `~/.cache/claude-lite/omlx/sessions`); the server then keeps running until `cl stop`. Closing the terminal of the session that started the server can still end it for the others.
+
+`cl serve` runs the steps above up to the ready check, then prints `oMLX ready at http://127.0.0.1:8435, serving <id>; Ctrl-C stops it` and stays in the foreground for other apps to use the server, without `claude`. Ctrl-C (or the server exiting) stops the server it started. A `cl mlx` session started meanwhile reuses it and leaves it running. An oMLX already serving the size's model is reused and `cl serve` exits 0 at once.
 
 `cl bench` still measures only Ollama.
 

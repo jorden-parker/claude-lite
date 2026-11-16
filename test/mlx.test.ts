@@ -9,6 +9,7 @@ import {
   mlxUrl,
   omlxDataDir,
   readMlxLogHealth,
+  serveMlx,
   servedModelId,
   spawnServer,
 } from "../src/mlx.ts";
@@ -103,6 +104,7 @@ function harness({
       isOmlxInstalled: () => hasOmlx,
       isSplashInstalled: () => hasSplash,
       writeModelSettings,
+      awaitShutdown: async () => 0,
       pollDelayMs: 0,
     },
   };
@@ -339,6 +341,122 @@ test("mlx --print-config prints the server command, settings path and settings w
   expect(lines[1]).toContain(join(DATA_DIR, "model_settings.json"));
   expect(JSON.parse(lines[2]).models[SERVED_35B].max_context_window).toBe(131072);
   expect(JSON.parse(lines[3]).env.ANTHROPIC_BASE_URL).toBe(mlxUrl());
+});
+
+test("serve starts the size's model, prints where it is ready, stops it on shutdown and never runs claude", async () => {
+  const { events, calls, modelSettingsWrites, dependencies } = harness();
+  const lines: string[] = [];
+  const original = console.log;
+  console.log = (line: string) => lines.push(line);
+  try {
+    expect(await serveMlx(home, ["35b"], dependencies)).toBe(0);
+  } finally {
+    console.log = original;
+  }
+  expect(events).toContain("serve");
+  expect(events.at(-1)).toBe("stop");
+  expect(calls.map((argv) => argv[0])).not.toContain("claude");
+  expect(modelSettingsWrites[0].document.models[SERVED_35B]).toBeDefined();
+  expect(lines).toContain(`oMLX ready at ${mlxUrl()}, serving ${SERVED_35B}; Ctrl-C stops it`);
+});
+
+test("serve exits 0 without starting a server when oMLX already serves the model", async () => {
+  const { events, serverCommands, dependencies } = harness({ servedReplies: [[SERVED_35B]] });
+  const lines: string[] = [];
+  const original = console.log;
+  console.log = (line: string) => lines.push(line);
+  try {
+    expect(await serveMlx(home, ["35b"], dependencies)).toBe(0);
+  } finally {
+    console.log = original;
+  }
+  expect(serverCommands).toEqual([]);
+  expect(events).not.toContain("stop");
+  expect(lines.join("\n")).toContain(`already serving ${SERVED_35B}`);
+});
+
+test("serve fails and names the port holder when something else serves it", async () => {
+  const { events, serverCommands, dependencies } = harness({ servedReplies: [["other-model"]] });
+  const errors: string[] = [];
+  const original = console.error;
+  console.error = (line: string) => errors.push(line);
+  try {
+    expect(await serveMlx(home, ["35b"], dependencies)).toBe(1);
+  } finally {
+    console.error = original;
+  }
+  expect(events).toContain("lsof");
+  expect(serverCommands).toEqual([]);
+  expect(errors[0]).toContain("already serves other-model");
+});
+
+test("serve returns 1 without downloading or starting anything when omlx is not installed", async () => {
+  const { calls, serverCommands, dependencies } = harness({ hasOmlx: false });
+  const errors: string[] = [];
+  const original = console.error;
+  console.error = (line: string) => errors.push(line);
+  try {
+    expect(await serveMlx(home, ["35b"], dependencies)).toBe(1);
+  } finally {
+    console.error = original;
+  }
+  expect(calls).toEqual([]);
+  expect(serverCommands).toEqual([]);
+  expect(errors[0]).toContain("brew install jundot/omlx/omlx");
+});
+
+test("serve returns 1 when oMLX exits before it lists the model", async () => {
+  const { events, dependencies } = harness({ doesServerDie: true });
+  const errors: string[] = [];
+  const original = console.error;
+  console.error = (line: string) => errors.push(line);
+  try {
+    expect(await serveMlx(home, ["35b"], dependencies)).toBe(1);
+  } finally {
+    console.error = original;
+  }
+  expect(events).not.toContain("claude");
+  expect(errors[0]).toContain("oMLX exited before it was ready");
+});
+
+test("serve --print-config prints the server command and model settings without running", async () => {
+  const { calls, events, modelSettingsWrites, dependencies } = harness();
+  const lines: string[] = [];
+  const original = console.log;
+  console.log = (line: string) => lines.push(line);
+  try {
+    expect(await serveMlx(home, ["35b", "--print-config"], dependencies)).toBe(0);
+  } finally {
+    console.log = original;
+  }
+  expect(calls).toEqual([]);
+  expect(events).toEqual([]);
+  expect(modelSettingsWrites).toEqual([]);
+  expect(lines).toHaveLength(3);
+  expect(lines[0]).toContain("omlx serve");
+  expect(lines[1]).toContain(join(DATA_DIR, "model_settings.json"));
+  expect(JSON.parse(lines[2]).models[SERVED_35B].max_context_window).toBe(131072);
+});
+
+test("serve refuses a size without an mlx model", async () => {
+  const tempHome = mkdtempSync(join(tmpdir(), "claude-lite-serve-"));
+  cpSync(join(home, "config"), join(tempHome, "config"), { recursive: true });
+  const sizesPath = join(tempHome, "config", "sizes.json");
+  const sizes = JSON.parse(readFileSync(sizesPath, "utf8"));
+  delete sizes["9b"].mlx;
+  writeFileSync(sizesPath, JSON.stringify(sizes));
+  writeFileSync(join(tempHome, "config", "local-sizes.json"), "{}");
+  const { calls, dependencies } = harness();
+  const errors: string[] = [];
+  const original = console.error;
+  console.error = (line: string) => errors.push(line);
+  try {
+    expect(await serveMlx(tempHome, ["9b"], dependencies)).toBe(1);
+  } finally {
+    console.error = original;
+  }
+  expect(calls).toEqual([]);
+  expect(errors[0]).toContain("9b has no mlx model");
 });
 
 test("servedModelId turns the Hugging Face repo id into the id oMLX serves", () => {

@@ -58,6 +58,13 @@ const BENCH_ONLY_FLAGS = ["--runs", "--compare"];
 const ollamaNext = (typed: string[], sizes: string[]) =>
   sizeCommandNext(typed, sizes, "--print-config");
 
+const serveNext = (typed: string[], sizes: string[]) =>
+  typed.length === 0
+    ? [...sizes, "--help"]
+    : typed.includes("--print-config")
+      ? []
+      : ["--print-config"];
+
 function benchNext(typed: string[], sizes: string[]): string[] {
   if (typed.at(-1) === "--runs") return [];
   const words = sizeCommandNext(typed, sizes, "--json").filter(
@@ -74,6 +81,7 @@ export function nextWords(typed: string[], { commands, sizes }: CompletionWords)
   if (command === "help") return rest.length === 0 ? commands : [];
   if (command === "ollama" || command === "mlx") return ollamaNext(rest, sizes);
   if (command === "bench") return benchNext(rest, sizes);
+  if (command === "serve") return serveNext(rest, sizes);
   if (!commands.includes(command) || rest.length > 0) return [];
   return ["--help"];
 }

@@ -10,6 +10,7 @@ import {
 } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { COMMAND_HELP } from "./help.ts";
 import { isRemoteHost, unloadModels } from "./ollama/api.ts";
 import { renderLaunchSettings, type Runner, runClaude, spawnRunner } from "./ollama/launch.ts";
 import { loadSizes, resolveSize, type Size } from "./ollama/sizes.ts";
@@ -49,6 +50,7 @@ type MlxDependencies = {
   isOmlxInstalled: () => boolean;
   isSplashInstalled: () => boolean;
   writeModelSettings: (path: string, document: unknown) => void;
+  awaitShutdown: (server: MlxServer) => Promise<number>;
   sessionsDir: string;
   pollDelayMs: number;
 };
@@ -118,6 +120,7 @@ const DEFAULTS: MlxDependencies = {
   isOmlxInstalled: () => Bun.which("omlx") !== null,
   isSplashInstalled: () => Bun.which(SPLASH_ENGINE) !== null,
   writeModelSettings: writeModelSettingsFile,
+  awaitShutdown: waitForShutdown,
   sessionsDir: join(omlxDataDir(homedir()), "sessions"),
   pollDelayMs: 1000,
 };
@@ -227,74 +230,71 @@ function warnWithoutSplash(name: string, size: Size, hasSplash: boolean) {
     );
 }
 
-export async function launchMlx(
-  home: string,
-  args: string[],
-  overrides: Partial<MlxDependencies> = {},
-): Promise<number> {
-  const {
-    run,
-    startServer,
-    unload,
-    servedModels,
-    isOmlxInstalled,
-    isSplashInstalled,
-    writeModelSettings,
-    sessionsDir,
-    pollDelayMs,
-  } = { ...DEFAULTS, ...overrides };
-  const isPrintOnly = args.includes("--print-config");
+type ServerPlan = {
+  name: string;
+  size: Size;
+  claudeArgs: string[];
+  model: string;
+  visionSize?: Size;
+  hasSplash: boolean;
+  document: ReturnType<typeof modelSettingsDocument>;
+  settingsPath: string;
+  command: string[];
+};
+
+function planServer(home: string, args: string[], hasSplash: boolean): ServerPlan | undefined {
   const { name, size, claudeArgs } = resolveSize(
     home,
     args.filter((arg) => arg !== "--print-config"),
   );
-  const repo = size.mlx;
-  if (!repo) {
+  if (!size.mlx) {
     console.error(`size ${name} has no mlx model; add "mlx" to it in config/sizes.json`);
-    return 1;
+    return undefined;
   }
-  const model = servedModelId(repo);
-  const dataDir = omlxDataDir(homedir());
-  const settingsPath = join(dataDir, "model_settings.json");
   const sizes = loadSizes(home);
-  const visionSize = size.vision_size ? sizes[size.vision_size] : undefined;
-  const visionRepo = visionSize?.mlx;
-  const hasSplash = isSplashInstalled();
+  const dataDir = omlxDataDir(homedir());
   warnWithoutSplash(name, size, hasSplash);
-  const document = modelSettingsDocument(sizes, size, hasSplash);
-  const settings = renderLaunchSettings(home, { ...size, model }, mlxUrl());
-  const command = serverCommand(dataDir);
-  if (isPrintOnly) {
-    console.log(command.join(" "));
-    console.log(`model settings: ${settingsPath}`);
-    console.log(JSON.stringify(document, null, 2));
-    console.log(JSON.stringify(settings, null, 2));
-    return 0;
-  }
-  if (!isOmlxInstalled()) {
+  return {
+    name,
+    size,
+    claudeArgs,
+    model: servedModelId(size.mlx),
+    visionSize: size.vision_size ? sizes[size.vision_size] : undefined,
+    hasSplash,
+    document: modelSettingsDocument(sizes, size, hasSplash),
+    settingsPath: join(dataDir, "model_settings.json"),
+    command: serverCommand(dataDir),
+  };
+}
+
+function printServerConfig(plan: ServerPlan) {
+  console.log(plan.command.join(" "));
+  console.log(`model settings: ${plan.settingsPath}`);
+  console.log(JSON.stringify(plan.document, null, 2));
+}
+
+type ServerStart = { kind: "failed" } | { kind: "reused" } | { kind: "started"; server: MlxServer };
+
+async function ensureServer(deps: MlxDependencies, plan: ServerPlan): Promise<ServerStart> {
+  if (!deps.isOmlxInstalled()) {
     console.error(`oMLX is not installed; install it with ${OMLX_INSTALL_HINT}`);
-    return 1;
+    return { kind: "failed" };
   }
-  const alreadyServed = await servedModels();
-  if (alreadyServed?.includes(model)) {
-    console.log(
-      `reusing the oMLX already serving ${model} on ${mlxUrl()}; it keeps running after claude exits (stop it: ${STOP_HINT})`,
-    );
-    await unloadOllama(unload);
-    return await withSessionRecorded(sessionsDir, () =>
-      runClaudeIn(home, size, model, settings, claudeArgs, run, visionRepo),
-    );
+  const alreadyServed = await deps.servedModels();
+  if (alreadyServed?.includes(plan.model)) {
+    await unloadOllama(deps.unload);
+    return { kind: "reused" };
   }
   if (alreadyServed !== null) {
     console.error(
-      `${mlxUrl()} already serves ${alreadyServed.join(", ") || "something that is not oMLX"}, not ${model}; free port ${mlxPort()} (stop a leftover oMLX: ${STOP_HINT})`,
+      `${mlxUrl()} already serves ${alreadyServed.join(", ") || "something that is not oMLX"}, not ${plan.model}; free port ${mlxPort()} (stop a leftover oMLX: ${STOP_HINT})`,
     );
-    await run(["lsof", "-nP", `-iTCP:${mlxPort()}`, "-sTCP:LISTEN"]);
-    return 1;
+    await deps.run(["lsof", "-nP", `-iTCP:${mlxPort()}`, "-sTCP:LISTEN"]);
+    return { kind: "failed" };
   }
-  for (const downloadRepo of reposToDownload([size, visionSize], hasSplash))
+  for (const downloadRepo of reposToDownload([plan.size, plan.visionSize], plan.hasSplash))
     if (
-      (await run([
+      (await deps.run([
         "uvx",
         "--python",
         PYTHON,
@@ -305,34 +305,103 @@ export async function launchMlx(
         downloadRepo,
       ])) !== 0
     )
-      return 1;
-  await unloadOllama(unload);
-  writeModelSettings(settingsPath, document);
-  console.log(`starting oMLX for ${model}; log: ${logPath()}`);
-  const server = startServer(command, logPath());
+      return { kind: "failed" };
+  await unloadOllama(deps.unload);
+  deps.writeModelSettings(plan.settingsPath, plan.document);
+  console.log(`starting oMLX for ${plan.model}; log: ${logPath()}`);
+  const server = deps.startServer(plan.command, logPath());
+  const listing = await waitUntilReady(server, deps.servedModels, deps.pollDelayMs);
+  if (listing?.includes(plan.model)) return { kind: "started", server };
+  if (listing === null) console.error(`oMLX exited before it was ready; see ${logPath()}`);
+  else
+    console.error(
+      `oMLX does not list ${plan.model}; the model is not in the Hugging Face cache as an MLX model; see ${logPath()}`,
+    );
+  server.stop();
+  return { kind: "failed" };
+}
+
+function stopUnlessShared(server: MlxServer, sessionsDir: string) {
+  const otherSessions = countOtherLiveSessions(sessionsDir);
+  if (otherSessions === 0) server.stop();
+  else
+    console.log(
+      `leaving oMLX running for ${otherSessions} other cl mlx session(s) (stop it: ${STOP_HINT})`,
+    );
+}
+
+export async function launchMlx(
+  home: string,
+  args: string[],
+  overrides: Partial<MlxDependencies> = {},
+): Promise<number> {
+  const deps = { ...DEFAULTS, ...overrides };
+  const plan = planServer(home, args, deps.isSplashInstalled());
+  if (!plan) return 1;
+  const settings = renderLaunchSettings(home, { ...plan.size, model: plan.model }, mlxUrl());
+  if (args.includes("--print-config")) {
+    printServerConfig(plan);
+    console.log(JSON.stringify(settings, null, 2));
+    return 0;
+  }
+  const start = await ensureServer(deps, plan);
+  if (start.kind === "failed") return 1;
+  if (start.kind === "reused")
+    console.log(
+      `reusing the oMLX already serving ${plan.model} on ${mlxUrl()}; it keeps running after claude exits (stop it: ${STOP_HINT})`,
+    );
   try {
-    const listing = await waitUntilReady(server, servedModels, pollDelayMs);
-    if (listing === null) {
-      console.error(`oMLX exited before it was ready; see ${logPath()}`);
-      return 1;
-    }
-    if (!listing.includes(model)) {
-      console.error(
-        `oMLX does not list ${model}; the model is not in the Hugging Face cache as an MLX model; see ${logPath()}`,
-      );
-      return 1;
-    }
-    return await withSessionRecorded(sessionsDir, () =>
-      runClaudeIn(home, size, model, settings, claudeArgs, run, visionRepo),
+    return await withSessionRecorded(deps.sessionsDir, () =>
+      runClaudeIn(
+        home,
+        plan.size,
+        plan.model,
+        settings,
+        plan.claudeArgs,
+        deps.run,
+        plan.visionSize?.mlx,
+      ),
     );
   } finally {
-    const otherSessions = countOtherLiveSessions(sessionsDir);
-    if (otherSessions === 0) server.stop();
-    else
-      console.log(
-        `leaving oMLX running for ${otherSessions} other cl mlx session(s) (stop it: ${STOP_HINT})`,
-      );
+    if (start.kind === "started") stopUnlessShared(start.server, deps.sessionsDir);
   }
+}
+
+export async function serveMlx(
+  home: string,
+  args: string[],
+  overrides: Partial<MlxDependencies> = {},
+): Promise<number> {
+  const deps = { ...DEFAULTS, ...overrides };
+  const sizes = loadSizes(home);
+  if (!args.every((arg) => arg === "--print-config" || Object.hasOwn(sizes, arg))) {
+    console.error(COMMAND_HELP.serve);
+    return 2;
+  }
+  const plan = planServer(home, args, deps.isSplashInstalled());
+  if (!plan) return 1;
+  if (args.includes("--print-config")) {
+    printServerConfig(plan);
+    return 0;
+  }
+  const start = await ensureServer(deps, plan);
+  if (start.kind === "failed") return 1;
+  if (start.kind === "reused") {
+    console.log(`oMLX is already serving ${plan.model} on ${mlxUrl()}; nothing started`);
+    return 0;
+  }
+  console.log(`oMLX ready at ${mlxUrl()}, serving ${plan.model}; Ctrl-C stops it`);
+  const code = await deps.awaitShutdown(start.server);
+  start.server.stop();
+  console.log("stopped oMLX");
+  return code;
+}
+
+function waitForShutdown(server: MlxServer): Promise<number> {
+  return new Promise((resolve) => {
+    for (const signal of ["SIGINT", "SIGTERM"] as const) process.once(signal, () => resolve(0));
+    void server.exited.then(resolve);
+  });
 }
 
 async function unloadOllama(unload: MlxDependencies["unload"]) {
