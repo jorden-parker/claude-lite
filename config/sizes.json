@@ -46,5 +46,20 @@
     },
     "mlx": "mlx-community/Qwen3.5-9B-4bit",
     "mlx_draft": "mlx-community/Qwen3.5-9B-MTP-4bit"
+  },
+  "40b": {
+    "base": "flint:40b-a2b-qat-int4",
+    "model": "flint-40b-128k-cc",
+    "context": 131072,
+    "output_tokens": 16384,
+    "thinking": true,
+    "parameters": {
+      "temperature": 1.0,
+      "top_k": 20,
+      "top_p": 0.95,
+      "min_p": 0
+    },
+    "memory_gb": 27.0,
+    "mlx": "mlx-community/flint-oQ4e"
   }
 }

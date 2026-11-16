@@ -101,6 +101,16 @@ test("resolveSize ignores the local wired limit when OLLAMA_HOST names another m
   expect(resolveSize(home, [], remote, 16 * GIB, localWiredLimitMb).name).toBe(PREFERRED_SIZE);
 });
 
+test("40b serves Recursive Flint with its card's sampling and fits 48 GB but not 32 GB", () => {
+  const flint = sizesWithoutOverlay["40b"];
+  expect(flint.base).toStartWith("flint:");
+  expect(flint.mlx).toStartWith("mlx-community/flint-");
+  expect(flint.parameters).toMatchObject({ temperature: 1, top_p: 0.95, top_k: 20 });
+  expect(fittingSizes(sizesWithoutOverlay, 48 * GIB, NO_WIRED_LIMIT)).toContain("40b");
+  expect(fittingSizes(sizesWithoutOverlay, 32 * GIB, NO_WIRED_LIMIT)).not.toContain("40b");
+  expect(defaultSize(sizesWithoutOverlay, 48 * GIB, NO_WIRED_LIMIT)).toBe(PREFERRED_SIZE);
+});
+
 test("pickSize stays internal to the sizes module", async () => {
   expect(Object.keys(await import("../src/ollama/sizes.ts"))).not.toContain("pickSize");
 });

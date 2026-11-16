@@ -29,7 +29,7 @@ Older versions wrapped `claude` through an rc function and a CLAUDE.md import. R
 
 ## Launch on Ollama
 
-    claude-lite ollama [27b|35b|9b] [--print-config] [--think|--no-think] [--qwen|--opencode] [--effort <level>] [claude args]
+    claude-lite ollama [27b|35b|9b|40b] [--print-config] [--think|--no-think] [--qwen|--opencode] [--effort <level>] [claude args]
     claude-lite ollama --print-config 27b   # print Modelfile + settings, no launch
     claude-lite ollama 35b --think -p "hi"
 
@@ -44,6 +44,7 @@ Pulls the base model and creates the `-cc` model when missing or when its parame
 `config/ollama.json` (which denies `Agent`) and `config/system-prompt.md`. Sizes live in `config/sizes.json`; each records the `memory_gb`
 Ollama needs to load it (its own estimate at the size's context). The default size is `35b` when that fits
 the machine (Ollama gets about 70% of RAM on Apple Silicon, or the `iogpu.wired_limit_mb` you set with `sudo sysctl` when it is positive), otherwise the largest size that fits: `9b` on 16 GB.
+`40b` is [Recursive Flint](https://huggingface.co/RecursiveSI/flint) (Apache 2.0, October 2026), a coding MoE with about 2.5B of its 40B parameters active per token, run with its card's thinking-mode sampling (temperature 1.0, top_p 0.95, top_k 20). It needs a 48 GB Mac and is never the default: pick it with `cl ollama 40b` or `cl mlx 40b`. Its `memory_gb` of 27 is an estimate (23 GB weights plus the KV cache of its 14 full-attention layers), so run `cl bench 40b` and correct it from Ollama's load report.
 When the load fails, for example because the model needs more memory, the launcher prints Ollama's reason and the
 sizes that do fit instead of starting `claude` against a model that cannot answer.
 It also loads no MCP servers (`--strict-mcp-config`) and turns off the built-in (`@builtin`) plugins your `~/.claude/settings.json` enables,
@@ -84,7 +85,7 @@ Like Qwen Code, OpenCode runs without claude-lite's permissions, sandbox, secret
 
 ## Launch on MLX directly
 
-    claude-lite mlx [27b|35b|9b] [--print-config] [--think|--no-think] [--qwen|--opencode] [--effort <level>] [claude args]
+    claude-lite mlx [27b|35b|9b|40b] [--print-config] [--think|--no-think] [--qwen|--opencode] [--effort <level>] [claude args]
     claude-lite mlx 35b --print-config   # print the server command, model settings and settings, no launch
 
 Runs the size's `mlx` model (an `mlx-community` 4-bit build named in `config/sizes.json`) through [oMLX](https://github.com/jundot/omlx) 0.7.3 or newer, which serves the Anthropic Messages API that `claude` needs, instead of Ollama. oMLX is not on PyPI, so install it with Homebrew (or the macOS app, as long as it puts `omlx` on PATH):
@@ -112,7 +113,7 @@ Check that a Homebrew install has the kernels with `/opt/homebrew/opt/omlx/libex
 
 ### Measure a size
 
-    cl bench [27b|35b|9b] [--think|--no-think] [--effort <level>] [--runs <n>] [--compare] [--json]
+    cl bench [27b|35b|9b|40b] [--think|--no-think] [--effort <level>] [--runs <n>] [--compare] [--json]
 
 Runs the size's model through Ollama's chat API with the launcher's system prompt and tool schemas for Bash, Read,
 Edit and Write, then prints a PASS/FAIL line per task with its speed and time to first token, `quality passed/total`, generation and prompt tokens per
