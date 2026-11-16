@@ -6,6 +6,7 @@ import type { Runner } from "./ollama/launch.ts";
 
 const PROVIDER = "claude-lite";
 const MINIMUM_OPENCODE_MAJOR = 2;
+const IMAGE_READER = "image-reader";
 
 async function openCodeMajorVersion(run: Runner): Promise<number | null> {
   const dir = mkdtempSync(join(tmpdir(), "claude-lite-opencode-"));
@@ -27,8 +28,8 @@ export async function runOpenCode(
     model,
     url,
     args,
-    isTextOnly,
-  }: { model: string; url: string; args: string[]; isTextOnly?: boolean },
+    visionModel,
+  }: { model: string; url: string; args: string[]; visionModel?: string },
   run: Runner,
 ): Promise<number> {
   const major = await openCodeMajorVersion(run);
@@ -51,13 +52,28 @@ export async function runOpenCode(
         name: PROVIDER,
         package: "@opencode/ai/providers/openai-compatible",
         settings: { baseURL: `${url}/v1` },
-        models: {
-          [model]: isTextOnly
-            ? { capabilities: { tools: true, input: ["text"], output: ["text"] } }
-            : {},
-        },
+        models: visionModel
+          ? {
+              [model]: { capabilities: { tools: true, input: ["text"], output: ["text"] } },
+              [visionModel]: {
+                capabilities: { tools: true, input: ["text", "image"], output: ["text"] },
+              },
+            }
+          : { [model]: {} },
       },
     },
+    ...(visionModel && {
+      agents: {
+        [IMAGE_READER]: {
+          description:
+            "Reads an image file (screenshot, mock-up, diagram, photo) and describes it. You cannot read images yourself: give this agent the file path and what you need to know about the image.",
+          mode: "subagent",
+          model: `${PROVIDER}/${visionModel}`,
+          system:
+            "Read the image file you are given and answer the question about it. Describe layout, text, colors and visible defects precisely. Do not edit files.",
+        },
+      },
+    }),
   };
   const hasOwnServer = args.some((arg) => arg === "--server" || arg === "--standalone");
   const serverArgs = hasOwnServer ? [] : ["--standalone"];

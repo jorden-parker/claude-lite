@@ -329,3 +329,11 @@ test("ollama settings leave the compaction threshold to the context window", asy
   const { env } = await Bun.file(join(home, "config", "ollama.json")).json();
   expect(env.CLAUDE_AUTOCOMPACT_PCT_OVERRIDE).toBeUndefined();
 });
+
+test("--opencode on a size with a vision size creates that size's model and hands it to the image-reader", async () => {
+  const { calls, envs, run } = recorder(false);
+  expect(await launch(home, ["40b", "--opencode"], run, okApi)).toBe(0);
+  expect(calls).toContainEqual(["ollama", "show", "qwen3.5-9b-mtp-cc"]);
+  const config = JSON.parse(envs.at(-1).OPENCODE_CONFIG_CONTENT);
+  expect(config.agents["image-reader"].model).toBe("claude-lite/qwen3.5-9b-mtp-cc");
+});

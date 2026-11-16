@@ -46,13 +46,26 @@ test("opencode gets an inline provider for the served model", async () => {
   });
 });
 
-test("a text-only size tells opencode not to send images", async () => {
+test("a size with a vision model stays text-only and gets an image-reader subagent on that model", async () => {
   const { envs, run } = fakeOpenCode("2.1.2");
-  expect(await runOpenCode({ ...OPTIONS, isTextOnly: true }, run)).toBe(0);
+  expect(await runOpenCode({ ...OPTIONS, visionModel: "qwen3.5-9b-mtp-cc" }, run)).toBe(0);
   const config = JSON.parse(envs.at(-1)?.OPENCODE_CONFIG_CONTENT ?? "");
-  expect(config.providers["claude-lite"].models[OPTIONS.model]).toEqual({
-    capabilities: { tools: true, input: ["text"], output: ["text"] },
+  expect(config.providers["claude-lite"].models).toEqual({
+    [OPTIONS.model]: { capabilities: { tools: true, input: ["text"], output: ["text"] } },
+    "qwen3.5-9b-mtp-cc": {
+      capabilities: { tools: true, input: ["text", "image"], output: ["text"] },
+    },
   });
+  expect(config.agents["image-reader"]).toMatchObject({
+    mode: "subagent",
+    model: "claude-lite/qwen3.5-9b-mtp-cc",
+  });
+});
+
+test("a size without a vision model gets no image-reader subagent", async () => {
+  const { envs, run } = fakeOpenCode("2.1.2");
+  await runOpenCode(OPTIONS, run);
+  expect(JSON.parse(envs.at(-1)?.OPENCODE_CONFIG_CONTENT ?? "").agents).toBeUndefined();
 });
 
 test("opencode gets a private server so a background service started for another model is not reused", async () => {

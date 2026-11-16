@@ -224,7 +224,11 @@ export async function launchMlx(
   const model = servedModelId(repo);
   const dataDir = omlxDataDir(homedir());
   const settingsPath = join(dataDir, "model_settings.json");
-  const document = modelSettingsDocument(loadSizes(home), size);
+  const sizes = loadSizes(home);
+  const visionSize = size.opencode && size.vision_size ? sizes[size.vision_size] : undefined;
+  const visionRepo = visionSize?.mlx;
+  const visionDraftRepo = visionSize?.mlx_draft;
+  const document = modelSettingsDocument(sizes, size);
   const settings = renderLaunchSettings(home, { ...size, model }, mlxUrl());
   const command = serverCommand(dataDir);
   if (isPrintOnly) {
@@ -245,7 +249,7 @@ export async function launchMlx(
     );
     await unloadOllama(unload);
     return await withSessionRecorded(sessionsDir, () =>
-      runClaudeIn(home, size, model, settings, claudeArgs, run),
+      runClaudeIn(home, size, model, settings, claudeArgs, run, visionRepo),
     );
   }
   if (alreadyServed !== null) {
@@ -255,7 +259,9 @@ export async function launchMlx(
     await run(["lsof", "-nP", `-iTCP:${mlxPort()}`, "-sTCP:LISTEN"]);
     return 1;
   }
-  for (const downloadRepo of [repo, size.mlx_draft].filter((name): name is string => !!name))
+  for (const downloadRepo of [repo, size.mlx_draft, visionRepo, visionDraftRepo].filter(
+    (name): name is string => !!name,
+  ))
     if (
       (await run([
         "uvx",
@@ -286,7 +292,7 @@ export async function launchMlx(
       return 1;
     }
     return await withSessionRecorded(sessionsDir, () =>
-      runClaudeIn(home, size, model, settings, claudeArgs, run),
+      runClaudeIn(home, size, model, settings, claudeArgs, run, visionRepo),
     );
   } finally {
     const otherSessions = countOtherLiveSessions(sessionsDir);
@@ -311,11 +317,17 @@ async function runClaudeIn(
   settings: Record<string, any>,
   claudeArgs: string[],
   run: Runner,
+  visionRepo?: string,
 ) {
   if (size.qwen) return await runQwen({ model, url: mlxUrl(), args: claudeArgs }, run);
   if (size.opencode)
     return await runOpenCode(
-      { model, url: mlxUrl(), args: claudeArgs, isTextOnly: size.text_only },
+      {
+        model,
+        url: mlxUrl(),
+        args: claudeArgs,
+        visionModel: visionRepo && servedModelId(visionRepo),
+      },
       run,
     );
   const dir = mkdtempSync(join(tmpdir(), "claude-lite-mlx-"));

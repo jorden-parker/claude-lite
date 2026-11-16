@@ -81,7 +81,7 @@ It needs OpenCode 2.0 or newer and exits 1 otherwise: older versions ignore the 
 
 The config also adds `config/opencode-instructions.md` to `instructions`, which tells OpenCode to browse with [agent-browser](https://agent-browser.dev/) (`brew install agent-browser`) instead of its web fetch tool.
 
-OpenCode assumes an unlisted model takes images. A size with `"text_only": true` in `config/sizes.json` (`40b`, Flint) is declared with text-only input, so OpenCode does not send it screenshots or attached images.
+Flint (`40b`) is text-only, so its `"vision_size": "9b"` in `config/sizes.json` makes `--opencode` declare it with text-only input and add an `image-reader` subagent that runs the `9b` Qwen model. Flint hands that subagent an image path and gets a description back. `cl ollama` pulls and creates the `9b` model first and `cl mlx` downloads its MLX repo. On Ollama the two models need about 36 GB together, so a 48 GB Mac may swap them for each image; on MLX they fit together.
 
 It also loads `src/opencode-plugin.ts` through the config's `plugins` key. The plugin runs your [claude-kit](https://github.com/jorden-parker/claude-kit) Claude Code hooks for OpenCode's tools, using the newest installed version of each plugin under `~/.claude/plugins/cache/claude-kit`. Each script gets the same JSON on stdin that Claude Code would send, and an `exit 2` or a `deny` decision blocks the tool call with the script's message:
 

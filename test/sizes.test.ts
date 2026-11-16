@@ -104,7 +104,7 @@ test("resolveSize ignores the local wired limit when OLLAMA_HOST names another m
 test("40b serves Recursive Flint with its card's sampling and fits 48 GB but not 32 GB", () => {
   const flint = sizesWithoutOverlay["40b"];
   expect(flint.base).toStartWith("flint:");
-  expect(flint.text_only).toBe(true);
+  expect(flint.vision_size).toBe("9b");
   expect(flint.mlx).toStartWith("mlx-community/flint-");
   expect(flint.parameters).toMatchObject({ temperature: 1, top_p: 0.95, top_k: 20 });
   expect(fittingSizes(sizesWithoutOverlay, 48 * GIB, NO_WIRED_LIMIT)).toContain("40b");

@@ -463,3 +463,13 @@ test("spawnServer keeps the server's stdout and stderr in order in one fresh log
   await server.exited;
   expect(readFileSync(logFile, "utf8")).toBe("starting\nAPIError: 500 out of memory\ndone\n");
 });
+
+test("mlx --opencode on a size with a vision size downloads that size's model for the image-reader", async () => {
+  const { calls, envs, dependencies } = harness({
+    servedReplies: [null, ["mlx-community--flint-oQ4e"]],
+  });
+  expect(await launchMlx(home, ["40b", "--opencode"], dependencies)).toBe(0);
+  expect(calls.map((argv) => argv.at(-1))).toContain("mlx-community/Qwen3.5-9B-4bit");
+  const config = JSON.parse(envs.at(-1).OPENCODE_CONFIG_CONTENT);
+  expect(config.agents["image-reader"].model).toBe("claude-lite/mlx-community--Qwen3.5-9B-4bit");
+});

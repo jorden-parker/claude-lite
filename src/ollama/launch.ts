@@ -188,11 +188,14 @@ async function launchFrom(
   }
   if (size.qwen)
     return await runQwen({ model: size.model, url: ollamaUrl(), args: claudeArgs }, run);
-  if (size.opencode)
+  if (size.opencode) {
+    const vision = size.vision_size ? buildPlan(home, [size.vision_size]) : undefined;
+    if (vision && !(await ensureModel(vision.size, vision.modelfile, dir, run, api))) return 1;
     return await runOpenCode(
-      { model: size.model, url: ollamaUrl(), args: claudeArgs, isTextOnly: size.text_only },
+      { model: size.model, url: ollamaUrl(), args: claudeArgs, visionModel: vision?.size.model },
       run,
     );
+  }
   return await runClaude(
     { dir, home, model: size.model, settings, claudeArgs, url: ollamaUrl() },
     run,
