@@ -81,6 +81,14 @@ It needs OpenCode 2.0 or newer and exits 1 otherwise: older versions ignore the 
 
 The config also adds `config/opencode-instructions.md` to `instructions`, which tells OpenCode to browse with [agent-browser](https://agent-browser.dev/) (`brew install agent-browser`) instead of its web fetch tool.
 
+It also loads `src/opencode-plugin.ts` through the config's `plugins` key. The plugin runs your [claude-kit](https://github.com/jorden-parker/claude-kit) Claude Code hooks for OpenCode's tools, using the newest installed version of each plugin under `~/.claude/plugins/cache/claude-kit`. Each script gets the same JSON on stdin that Claude Code would send, and an `exit 2` or a `deny` decision blocks the tool call with the script's message:
+
+- `edit` and `write`: `tdd-require-red`, `no-comments` and `naming-check`. The last two run before the edit and block it, where Claude Code reports them after the edit lands.
+- `bash`: `bash-guard`, `commit-guard` and `fallow-gate` before the command; `tdd-record-test-run` after it, so a failing test unlocks the TDD gate.
+- `read`: `read-guard`.
+
+Not ported: the Stop gates (`tdd-green-gate`, `verify-before-finish-gate`, `naming-review-gate`, `browser-check`), `bash-trim`, and the SessionStart rule printers. OpenCode has no hook that blocks a turn from finishing, and the scripts that read Claude Code's transcript find none. Each `opencode` launch counts as one hook session. OpenCode's after-tool event has no call id, so results are paired with calls in the order they started; parallel tool calls can mix them up.
+
 Like Qwen Code, OpenCode runs without claude-lite's permissions, sandbox, secret denies and system prompt. Configure its own permissions in `~/.config/opencode/opencode.json`.
 
 ## Launch on MLX directly

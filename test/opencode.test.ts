@@ -5,6 +5,7 @@ import { liteHome } from "../src/home.ts";
 import { runOpenCode } from "../src/opencode.ts";
 
 const BROWSER_INSTRUCTIONS = join(liteHome(), "config", "opencode-instructions.md");
+const CLAUDE_KIT_PLUGIN = join(liteHome(), "src", "opencode-plugin.ts");
 
 const OPTIONS = {
   model: "qwen3.8-27b-dflash-cc",
@@ -33,6 +34,7 @@ test("opencode gets an inline provider for the served model", async () => {
     $schema: "https://opencode.ai/config.json",
     model: "claude-lite/qwen3.8-27b-dflash-cc",
     instructions: [BROWSER_INSTRUCTIONS],
+    plugins: [CLAUDE_KIT_PLUGIN],
     providers: {
       "claude-lite": {
         name: "claude-lite",

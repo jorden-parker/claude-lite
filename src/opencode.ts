@@ -40,6 +40,7 @@ export async function runOpenCode(
     $schema: "https://opencode.ai/config.json",
     model: `${PROVIDER}/${model}`,
     instructions: [join(liteHome(), "config", "opencode-instructions.md")],
+    plugins: [join(liteHome(), "src", "opencode-plugin.ts")],
     providers: {
       [PROVIDER]: {
         name: PROVIDER,
