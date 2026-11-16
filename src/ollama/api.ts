@@ -96,7 +96,11 @@ async function* replyLines(response: Response): AsyncGenerator<string> {
   yield pending;
 }
 
-export async function streamChat(request: ChatRequest, baseUrl = ollamaUrl()): Promise<ChatReply> {
+export async function streamChat(
+  request: ChatRequest,
+  baseUrl = ollamaUrl(),
+  hearChunk: (chunk: ChatReply) => void = () => {},
+): Promise<ChatReply> {
   const startedAt = performance.now();
   const response = await fetch(`${baseUrl}/api/chat`, {
     method: "POST",
@@ -111,6 +115,7 @@ export async function streamChat(request: ChatRequest, baseUrl = ollamaUrl()): P
     if (typeof chunk.error === "string") throw new Error(chunk.error);
     if (chunks.length === 0) firstChunkAt = performance.now();
     chunks.push(chunk);
+    hearChunk(chunk);
   }
   return { ...mergeChunks(chunks), first_token_seconds: (firstChunkAt - startedAt) / 1000 };
 }

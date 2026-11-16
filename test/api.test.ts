@@ -55,6 +55,22 @@ test("streamChat reads a streamed reply and times the first chunk", async () => 
   }
 });
 
+test("streamChat hands each chunk to the listener as it arrives", async () => {
+  const server = serveLines([
+    { message: { role: "assistant", content: "Hel" } },
+    { message: { role: "assistant", content: "lo" }, eval_count: 2 },
+  ]);
+  const heard: string[] = [];
+  try {
+    await streamChat({ model: "m", messages: [] }, `http://localhost:${server.port}`, (chunk) =>
+      heard.push(chunk.message.content),
+    );
+    expect(heard).toEqual(["Hel", "lo"]);
+  } finally {
+    server.stop(true);
+  }
+});
+
 test("streamChat throws the server's error line", async () => {
   const server = serveLines([{ error: "model not found" }]);
   const request = { model: "m", messages: [] };
