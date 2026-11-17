@@ -120,6 +120,20 @@ Check that a Homebrew install has the kernels with `/opt/homebrew/opt/omlx/libex
 
 `cl bench` still measures only Ollama.
 
+#### T3 Code
+
+[T3 Code](https://github.com/pingdotgg/t3code) has no official local model support, but a Claude provider instance can point at `cl serve 27b` through `config/t3-code-27b.json`, a Claude settings file with only an `env` block. This setup is untested.
+
+1. Run `cl serve 27b` and leave it running.
+2. In T3 Code, open **Settings → Providers → Add provider**, pick **Claude**, and on the **Config** step set **Binary path** to `claude` and **CLAUDE_CONFIG_DIR path** to `~/.claude_local`, so your Anthropic login is not used.
+3. On the instance's page, set **Runtime → Launch arguments** (adjust the checkout path):
+
+       --settings ~/src/claude-lite/config/t3-code-27b.json --append-system-prompt-file ~/src/claude-lite/config/system-prompt.md
+
+4. Under **Models → Add custom model**, add `mlx-community--Qwen3.8-27B-4bit`, then pick it in a new thread.
+
+T3 Code starts `claude` itself, so the launcher's sandbox, permissions, secret denies and tool list do not apply. The file assumes port 8435: with `CLAUDE_LITE_MLX_PORT` set, copy it and change `ANTHROPIC_BASE_URL`. `test/t3-code.test.ts` fails when the file no longer matches the `27b` size in `config/sizes.json`.
+
 #### Speed notes
 
 None of these numbers were measured with claude-lite. Time a real task before and after.
