@@ -281,7 +281,7 @@ const launchWithMode = async (mode: string, claudeArgs: string[] = []) => {
   saveConfigState(tempHome, chosen);
   const { calls, run, written } = recorder(false);
   await launch(tempHome, ["27b", ...claudeArgs], run, okApi);
-  return { argv: calls.at(-1)!, permissions: written[0].permissions };
+  return { argv: calls.at(-1)!, permissions: written[0].permissions, settings: written[0] };
 };
 const modeFlagOf = (argv: string[]) =>
   argv.includes("--permission-mode") ? argv[argv.indexOf("--permission-mode") + 1] : undefined;
@@ -298,6 +298,13 @@ test.each(["acceptEdits", "plan", "auto", "bypassPermissions"])(
 test("auto mode drops the base disableAutoMode, and other modes keep it", async () => {
   expect((await launchWithMode("auto")).permissions.disableAutoMode).toBeUndefined();
   expect((await launchWithMode("plan")).permissions.disableAutoMode).toBe("disable");
+});
+
+test("auto mode names the size's model as its classifier, and other modes do not", async () => {
+  const autoSettings = (await launchWithMode("auto")).settings;
+  expect(autoSettings.env.CLAUDE_CODE_AUTO_MODE_MODEL).toBe(autoSettings.model);
+  const planSettings = (await launchWithMode("plan")).settings;
+  expect(planSettings.env.CLAUDE_CODE_AUTO_MODE_MODEL).toBeUndefined();
 });
 
 test("the default permission mode adds no flag", async () => {

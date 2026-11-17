@@ -19,6 +19,7 @@ export function renderSettings(base: Record<string, any>, size: Size): Record<st
       CLAUDE_CODE_MAX_CONTEXT_TOKENS: String(size.context),
       CLAUDE_CODE_MAX_OUTPUT_TOKENS: String(size.output_tokens),
       ...(extraBody && { CLAUDE_CODE_EXTRA_BODY: JSON.stringify(extraBody) }),
+      ...(base.permissions?.defaultMode === "auto" && { CLAUDE_CODE_AUTO_MODE_MODEL: model }),
     },
   };
 }
