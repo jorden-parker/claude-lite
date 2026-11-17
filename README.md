@@ -122,17 +122,17 @@ Check that a Homebrew install has the kernels with `/opt/homebrew/opt/omlx/libex
 
 #### T3 Code
 
-[T3 Code](https://github.com/pingdotgg/t3code) has no official local model support, but a Claude provider instance can point at `cl serve 27b` through `config/t3-code-27b.json`, a Claude settings file with only an `env` block. This setup is untested.
+[T3 Code](https://github.com/pingdotgg/t3code) has no official local model support, but a Claude provider instance can point at `cl serve 27b` through `config/t3-code-27b.json`, a Claude settings file with only an `env` block. This setup is untested end to end.
 
-1. Run `cl serve 27b` and leave it running.
-2. In T3 Code, open **Settings → Providers → Add provider**, pick **Claude**, and on the **Config** step set **Binary path** to `claude` and **CLAUDE_CONFIG_DIR path** to `~/.claude_local`, so your Anthropic login is not used.
-3. On the instance's page, set **Runtime → Launch arguments** (adjust the checkout path):
+1. Run `scripts/t3-code-setup.sh`. It copies that file to `~/.claude_local/settings.json` and prints the values for the next steps. It exits 1 and changes nothing when a different `settings.json` is already there.
+2. Run `cl serve 27b` and leave it running.
+3. In T3 Code, open **Settings → Providers → Add provider**, pick **Claude**, and on the **Config** step set **Binary path** to `claude`, **CLAUDE_CONFIG_DIR path** to `~/.claude_local` and **Launch arguments** to the `--append-system-prompt-file` line the script printed.
+4. Click **Refresh provider status**; the instance's **Status** row should show **Custom API endpoint**.
+5. On the instance's page, under **Models → Add custom model**, add `mlx-community--Qwen3.8-27B-4bit`, then pick it in a new thread.
 
-       --settings ~/src/claude-lite/config/t3-code-27b.json --append-system-prompt-file ~/src/claude-lite/config/system-prompt.md
+The settings must be the config folder's `settings.json` (or the instance's **Variables**): T3 Code 0.1.10 looks for `ANTHROPIC_BASE_URL` only there when it checks the instance, ignores a `--settings` launch argument for that check, and reports an instance with no endpoint and no login as not authenticated.
 
-4. Under **Models → Add custom model**, add `mlx-community--Qwen3.8-27B-4bit`, then pick it in a new thread.
-
-T3 Code starts `claude` itself, so the launcher's sandbox, permissions, secret denies and tool list do not apply. The file assumes port 8435: with `CLAUDE_LITE_MLX_PORT` set, copy it and change `ANTHROPIC_BASE_URL`. `test/t3-code.test.ts` fails when the file no longer matches the `27b` size in `config/sizes.json`.
+T3 Code starts `claude` itself, so the launcher's sandbox, permissions, secret denies and tool list do not apply. The file assumes port 8435: with `CLAUDE_LITE_MLX_PORT` set, change `ANTHROPIC_BASE_URL` in `~/.claude_local/settings.json`. `test/t3-code.test.ts` fails when the file no longer matches the `27b` size in `config/sizes.json`.
 
 #### Speed notes
 
