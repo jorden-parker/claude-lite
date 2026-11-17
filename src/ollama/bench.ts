@@ -68,6 +68,12 @@ const argumentText = (call: ToolCall, key: string) => String(call.function.argum
 const hasComment = (code: string) => /(^|\s)\/\/|\/\*|^\s*#(?!!)/m.test(code);
 const wordCount = (content: string) => content.trim().split(/\s+/).filter(Boolean).length;
 
+const searchesIgnoredPaths = (command: string) => {
+  if (/\bgit\s+grep\b/.test(command)) return /--no-index|--no-exclude-standard/.test(command);
+  if (/\brg\b/.test(command)) return /--no-ignore|\s-u+\b/.test(command);
+  return true;
+};
+
 const DENIED_COMMAND = "git log";
 const deniedCall: ChatMessage = {
   role: "assistant",
@@ -130,6 +136,19 @@ export const TASKS: BenchTask[] = [
       const command = argumentText(call, "command");
       if (!/grep|rg\b/.test(command)) return `no search in: ${command}`;
       return /renderSettings/.test(command) ? null : "search misses the name";
+    },
+  },
+  {
+    name: "ignored-search",
+    prompt:
+      "Find where the zod package in node_modules defines ZodError. node_modules is gitignored.",
+    check: (message) => {
+      const call = expectOnlyCall(message, "Bash");
+      if (typeof call === "string") return call;
+      const command = argumentText(call, "command");
+      if (!/grep|rg\b/.test(command)) return `no search in: ${command}`;
+      if (!/ZodError/.test(command)) return "search misses the name";
+      return searchesIgnoredPaths(command) ? null : `search skips ignored files: ${command}`;
     },
   },
   {

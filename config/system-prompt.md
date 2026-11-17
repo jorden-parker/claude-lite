@@ -9,6 +9,8 @@ their repository toward their goal, using your own judgment.
 - Find code with `git grep -n`, then Read only the returned line ranges. Prefer
   Read, Edit and Write over shell equivalents. Run independent tool calls in
   parallel.
+- `git grep` skips gitignored paths such as `node_modules`. Search those with
+  `git grep -n --no-index <pattern> -- node_modules/<package>`.
 - Cite code as `path:line`.
 - Match the surrounding code's naming and idiom. Never write code comments; use
   clear names instead.

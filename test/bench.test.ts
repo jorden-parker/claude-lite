@@ -85,6 +85,17 @@ test("bounded-search wants a grep for the name", () => {
   expect(task("bounded-search").check(call("Read", { file_path: "src" }))).toContain("Read");
 });
 
+test("ignored-search wants a search that reaches gitignored files", () => {
+  const search = (command: string) => task("ignored-search").check(call("Bash", { command }));
+  expect(search("git grep -n --no-index ZodError -- node_modules/zod")).toBeNull();
+  expect(search("grep -rn ZodError node_modules/zod")).toBeNull();
+  expect(search("rg --no-ignore ZodError node_modules/zod")).toBeNull();
+  expect(search("git grep -n ZodError -- node_modules/zod")).toContain("skips ignored");
+  expect(search("rg ZodError node_modules/zod")).toContain("skips ignored");
+  expect(search("ls node_modules/zod")).toContain("no search");
+  expect(search("grep -rn Zod node_modules/zod")).toContain("misses the name");
+});
+
 test("write-test wants a bun test file with the expectation", () => {
   const good = call("Write", {
     file_path: "test/leap.test.ts",
