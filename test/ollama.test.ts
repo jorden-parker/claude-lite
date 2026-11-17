@@ -10,6 +10,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { loadConfigState, saveConfigState } from "../src/config-screen.ts";
 import { type LauncherApi, ollamaUrl } from "../src/ollama/api.ts";
 import { launch, loadFailureHint, type Runner } from "../src/ollama/launch.ts";
 import { modelParameters, renderModelfile } from "../src/ollama/modelfile.ts";
@@ -270,6 +271,53 @@ test("local-ollama.json overlays ollama.json on launch", async () => {
   await launch(tempHome, ["27b"], run, okApi);
   expect(written[0].sandbox.enabled).toBe(false);
   expect(written[0].permissions.deny).toEqual([]);
+});
+
+const launchWithMode = async (mode: string, claudeArgs: string[] = []) => {
+  const tempHome = mkdtempSync(join(tmpdir(), "claude-lite-ollama-"));
+  cpSync(join(home, "config"), join(tempHome, "config"), { recursive: true });
+  const state = loadConfigState(tempHome);
+  const chosen = { ...state, ollamaOverlay: { permissions: { defaultMode: mode } } };
+  saveConfigState(tempHome, chosen);
+  const { calls, run, written } = recorder(false);
+  await launch(tempHome, ["27b", ...claudeArgs], run, okApi);
+  return { argv: calls.at(-1)!, permissions: written[0].permissions };
+};
+const modeFlagOf = (argv: string[]) =>
+  argv.includes("--permission-mode") ? argv[argv.indexOf("--permission-mode") + 1] : undefined;
+
+test.each(["acceptEdits", "plan", "auto", "bypassPermissions"])(
+  "permission mode %s saved by cl config reaches claude as a flag and a setting",
+  async (mode) => {
+    const { argv, permissions } = await launchWithMode(mode);
+    expect(modeFlagOf(argv)).toBe(mode);
+    expect(permissions.defaultMode).toBe(mode);
+  },
+);
+
+test("auto mode drops the base disableAutoMode, and other modes keep it", async () => {
+  expect((await launchWithMode("auto")).permissions.disableAutoMode).toBeUndefined();
+  expect((await launchWithMode("plan")).permissions.disableAutoMode).toBe("disable");
+});
+
+test("the default permission mode adds no flag", async () => {
+  const { calls, run } = recorder(false);
+  await launch(home, ["27b"], run, okApi);
+  expect(calls.at(-1)).not.toContain("--permission-mode");
+});
+
+const MODE_OVERRIDES = [
+  ["--permission-mode", "plan"],
+  ["--permission-mode=plan"],
+  ["--dangerously-skip-permissions"],
+];
+
+test("a mode passed after the size wins over the configured one", async () => {
+  for (const claudeArgs of MODE_OVERRIDES) {
+    const { argv } = await launchWithMode("acceptEdits", claudeArgs);
+    expect(argv).not.toContain("acceptEdits");
+    expect(argv.slice(-claudeArgs.length)).toEqual(claudeArgs);
+  }
 });
 
 test("launch removes its temp dir after claude exits", async () => {

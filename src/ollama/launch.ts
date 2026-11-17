@@ -95,10 +95,28 @@ function withServerUrl<Settings extends Record<string, any>>(settings: Settings,
   };
 }
 
+const AUTO_MODE = "auto";
+const DEFAULT_MODE = "default";
+const MODE_FLAGS = ["--permission-mode", "--dangerously-skip-permissions"];
+
+function withAutoModeSelectable(settings: Record<string, any>): Record<string, any> {
+  if (settings.permissions?.defaultMode !== AUTO_MODE) return settings;
+  const { disableAutoMode: _blocksAuto, ...permissions } = settings.permissions;
+  return { ...settings, permissions };
+}
+
+export function permissionModeArgs(settings: Record<string, any>, claudeArgs: string[]): string[] {
+  const mode = settings.permissions?.defaultMode ?? DEFAULT_MODE;
+  const isChosenByArgs = claudeArgs.some((arg) =>
+    MODE_FLAGS.some((flag) => arg === flag || arg.startsWith(`${flag}=`)),
+  );
+  return mode === DEFAULT_MODE || isChosenByArgs ? [] : ["--permission-mode", mode];
+}
+
 export function ollamaBaseSettings(home: string): Record<string, any> {
   const base = JSON.parse(readFileSync(join(home, "config", "ollama.json"), "utf8"));
   const overlaid = withJsonOverlay(base, join(home, "config", "local-ollama.json"));
-  return withSharedSecrets(overlaid, home);
+  return withAutoModeSelectable(withSharedSecrets(overlaid, home));
 }
 
 export function renderLaunchSettings(home: string, size: Size, serverUrl?: string) {
@@ -260,6 +278,7 @@ export async function runClaude(
       visionModel ? `${TOOLS},${AGENT_TOOL}` : TOOLS,
       "--strict-mcp-config",
       ...(visionModel ? imageReaderArgs(visionModel) : []),
+      ...permissionModeArgs(settings, claudeArgs),
       ...claudeArgs,
     ],
     env,
