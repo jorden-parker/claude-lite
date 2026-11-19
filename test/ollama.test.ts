@@ -145,6 +145,11 @@ test("ollama sandbox can read skills inside the denied ~/.claude", async () => {
   expect(filesystem.allowRead).toContain("~/.claude/skills");
 });
 
+test("local sessions switch off the guards plugin's delegate guard", async () => {
+  const { env } = await Bun.file(join(home, "config", "ollama.json")).json();
+  expect(env.GUARDS_DELEGATE_GUARD).toBe("0");
+});
+
 async function writtenSettings(variable: string, optOut: string) {
   const previous = process.env[variable];
   process.env[variable] = optOut;
