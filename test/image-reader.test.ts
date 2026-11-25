@@ -41,6 +41,7 @@ test("claude gets an image-reader subagent on the vision model and may spawn it"
   expect(agent.model).toBe(VISION_MODEL);
   expect(agent.tools).toEqual(["Read"]);
   expect(valueAfter(argv, "--tools").split(",")).toContain("Agent");
+  expect(valueAfter(argv, "--tools").split(",")).toContain("AskUserQuestion");
   expect(valueAfter(argv, "--append-system-prompt")).toBe(IMAGE_READER_HANDOFF);
   expect(settings.availableModels).toEqual(["flint", VISION_MODEL]);
   expect(settings.permissions.deny).not.toContain("Agent");
@@ -51,6 +52,7 @@ test("claude without a vision model keeps Agent denied and defines no subagent",
   expect(argv).not.toContain("--agents");
   expect(argv).not.toContain("--append-system-prompt");
   expect(valueAfter(argv, "--tools").split(",")).not.toContain("Agent");
+  expect(valueAfter(argv, "--tools").split(",")).toContain("AskUserQuestion");
   expect(settings.availableModels).toEqual(["flint"]);
   expect(settings.permissions.deny).toContain("Agent");
 });

@@ -22,7 +22,7 @@ export const spawnRunner: Runner = async (argv, env) =>
   await Bun.spawn(argv, { stdio: ["inherit", "inherit", "inherit"], env: env ?? process.env })
     .exited;
 
-const TOOLS = "Bash,Read,Edit,Write,Skill";
+const TOOLS = "Bash,Read,Edit,Write,Skill,AskUserQuestion";
 const AGENT_TOOL = "Agent";
 
 const withImageReaderAllowed = (settings: Record<string, any>, visionModel: string) => ({
