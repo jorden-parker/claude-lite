@@ -1,8 +1,10 @@
 import { expect, test } from "bun:test";
-import { cpSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  hubCacheDir,
+  isRepoInHubCache,
   launchMlx,
   modelSettingsDocument,
   mlxLogPath,
@@ -103,6 +105,7 @@ function harness({
       servedModels,
       isOmlxInstalled: () => hasOmlx,
       isSplashInstalled: () => hasSplash,
+      isRepoCached: () => false,
       writeModelSettings,
       awaitShutdown: async () => 0,
       pollDelayMs: 0,
@@ -567,6 +570,30 @@ test("mlx downloads a size's mlx_draft drafter after its model", async () => {
     "mlx-community/Qwen3.8-27B-4bit",
     "mlx-community/Qwen3.8-27B-MTP-4bit",
   ]);
+});
+
+test("mlx skips hf download for repos already in the Hugging Face cache", async () => {
+  const { calls, dependencies } = harness();
+  await launchMlx(home, ["27b"], { ...dependencies, isRepoCached: (repo) => repo === MODEL_27B });
+  const downloads = calls.filter((argv) => argv[0] === "uvx").map((argv) => argv.at(-1));
+  expect(downloads).toEqual(["mlx-community/Qwen3.8-27B-MTP-4bit"]);
+});
+
+test("hubCacheDir prefers HF_HUB_CACHE, then HF_HOME, then the home default", () => {
+  expect(hubCacheDir({ HF_HUB_CACHE: "/x" }, "/home/me")).toBe("/x");
+  expect(hubCacheDir({ HF_HOME: "/hf" }, "/home/me")).toBe("/hf/hub");
+  expect(hubCacheDir({}, "/home/me")).toBe("/home/me/.cache/huggingface/hub");
+});
+
+test("isRepoInHubCache needs a snapshot and no incomplete blob", () => {
+  const cacheDir = mkdtempSync(join(tmpdir(), "claude-lite-hub-"));
+  expect(isRepoInHubCache(cacheDir, "org/name")).toBe(false);
+  const repoDir = join(cacheDir, "models--org--name");
+  mkdirSync(join(repoDir, "snapshots", "abc123"), { recursive: true });
+  mkdirSync(join(repoDir, "blobs"), { recursive: true });
+  expect(isRepoInHubCache(cacheDir, "org/name")).toBe(true);
+  writeFileSync(join(repoDir, "blobs", "deadbeef.incomplete"), "");
+  expect(isRepoInHubCache(cacheDir, "org/name")).toBe(false);
 });
 
 test("every Qwen mlx size pairs its model with that model's MTP drafter", () => {

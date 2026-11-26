@@ -49,6 +49,7 @@ type MlxDependencies = {
   servedModels: () => Promise<string[] | null>;
   isOmlxInstalled: () => boolean;
   isSplashInstalled: () => boolean;
+  isRepoCached: (repo: string) => boolean;
   writeModelSettings: (path: string, document: unknown) => void;
   awaitShutdown: (server: MlxServer) => Promise<number>;
   sessionsDir: string;
@@ -112,6 +113,23 @@ async function withSessionRecorded(sessionsDir: string, runSession: () => Promis
 
 export const omlxDataDir = (userHome: string) => join(userHome, ".cache", "claude-lite", "omlx");
 
+export const servedModelId = (repo: string) => repo.replaceAll("/", "--");
+
+export const hubCacheDir = (
+  env: Record<string, string | undefined> = process.env,
+  userHome = homedir(),
+) => env.HF_HUB_CACHE || join(env.HF_HOME || join(userHome, ".cache", "huggingface"), "hub");
+
+export function isRepoInHubCache(cacheDir: string, repo: string): boolean {
+  const repoDir = join(cacheDir, `models--${servedModelId(repo)}`);
+  const listFolder = (folder: string) =>
+    existsSync(join(repoDir, folder)) ? readdirSync(join(repoDir, folder)) : [];
+  return (
+    listFolder("snapshots").length > 0 &&
+    !listFolder("blobs").some((blob) => blob.endsWith(".incomplete"))
+  );
+}
+
 const DEFAULTS: MlxDependencies = {
   run: spawnRunner,
   startServer: spawnServer,
@@ -119,6 +137,7 @@ const DEFAULTS: MlxDependencies = {
   servedModels: fetchServedModels,
   isOmlxInstalled: () => Bun.which("omlx") !== null,
   isSplashInstalled: () => Bun.which(SPLASH_ENGINE) !== null,
+  isRepoCached: (repo) => isRepoInHubCache(hubCacheDir(), repo),
   writeModelSettings: writeModelSettingsFile,
   awaitShutdown: waitForShutdown,
   sessionsDir: join(omlxDataDir(homedir()), "sessions"),
@@ -127,8 +146,6 @@ const DEFAULTS: MlxDependencies = {
 
 export const mlxLogPath = (userHome: string) =>
   join(userHome, ".cache", "claude-lite", "mlx-server.log");
-
-export const servedModelId = (repo: string) => repo.replaceAll("/", "--");
 
 export type MlxLogHealth = { cacheStores: number; cacheSkipReasons: string[] };
 
@@ -292,7 +309,9 @@ async function ensureServer(deps: MlxDependencies, plan: ServerPlan): Promise<Se
     await deps.run(["lsof", "-nP", `-iTCP:${mlxPort()}`, "-sTCP:LISTEN"]);
     return { kind: "failed" };
   }
-  for (const downloadRepo of reposToDownload([plan.size, plan.visionSize], plan.hasSplash))
+  for (const downloadRepo of reposToDownload([plan.size, plan.visionSize], plan.hasSplash).filter(
+    (repo) => !deps.isRepoCached(repo),
+  ))
     if (
       (await deps.run([
         "uvx",
