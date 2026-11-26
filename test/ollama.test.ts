@@ -360,7 +360,9 @@ test("launch stops with a hint when the model does not fit in memory", async () 
   const original = console.error;
   console.error = (line: string) => errors.push(line);
   try {
-    expect(await launch(home, ["35b"], run, failingApi("model requires 22.0 GiB"))).toBe(1);
+    expect(
+      await launch(home, ["35b"], run, failingApi("model requires 22.0 GiB"), 64 * GIB, 0),
+    ).toBe(1);
   } finally {
     console.error = original;
   }

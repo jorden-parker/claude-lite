@@ -190,6 +190,8 @@ export async function launch(
   args: string[],
   run: Runner = spawnRunner,
   api: LauncherApi = fetchApi,
+  memoryBytes = totalmem(),
+  wiredLimitMb?: number,
 ): Promise<number> {
   if (args.includes("--print-config")) {
     const { settings, modelfile } = buildPlan(
@@ -212,7 +214,7 @@ export async function launch(
   }
   const dir = mkdtempSync(join(tmpdir(), "claude-lite-"));
   try {
-    return await launchFrom(dir, home, plan, run, api);
+    return await launchFrom(dir, home, plan, run, api, memoryBytes, wiredLimitMb);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -226,12 +228,14 @@ async function launchFrom(
   { name, size, settings, modelfile, claudeArgs }: LaunchPlan,
   run: Runner,
   api: LauncherApi,
+  memoryBytes: number,
+  wiredLimitMb?: number,
 ): Promise<number> {
   if (!(await ensureModel(size, modelfile, dir, run, api))) return 1;
   const loadError = await api.load(size.model);
   if (loadError !== null) {
     console.error(`${size.model} failed to load: ${loadError}`);
-    console.error(loadFailureHint(home, name));
+    console.error(loadFailureHint(home, name, memoryBytes, wiredLimitMb));
     return 1;
   }
   const vision = size.vision_size ? buildPlan(home, [size.vision_size]) : undefined;
