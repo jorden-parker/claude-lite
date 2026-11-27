@@ -1,9 +1,11 @@
 import { expect, test } from "bun:test";
 import {
+  closeSync,
   cpSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
+  openSync,
   readdirSync,
   readFileSync,
   writeFileSync,
@@ -85,9 +87,14 @@ function harness({
   const startServer = (argv: string[]) => {
     events.push("serve");
     serverCommands.push(argv);
+    const { promise, resolve } = Promise.withResolvers<number>();
+    if (doesServerDie) resolve(1);
     return {
-      exited: doesServerDie ? Promise.resolve(1) : new Promise<number>(() => {}),
-      stop: () => events.push("stop"),
+      exited: promise,
+      stop: () => {
+        events.push("stop");
+        resolve(0);
+      },
     };
   };
   const unload = async () => {
@@ -234,6 +241,35 @@ test("mlx stops the server when the only other session file is from a dead proce
   writeFileSync(join(sessionsDir, "2147483646"), "");
   expect(await launchMlx(home, ["35b"], dependencies)).toBe(0);
   expect(events.at(-1)).toBe("stop");
+});
+
+test("reopening 27b during shutdown waits before probing and starts a fresh server", async () => {
+  const first = harness({ servedReplies: [null, [SERVED_27B]] });
+  const stopping = Promise.withResolvers<void>();
+  const exited = Promise.withResolvers<number>();
+  const closing = launchMlx(home, ["27b"], {
+    ...first.dependencies,
+    startServer: () => ({
+      pid: process.pid,
+      stop: () => stopping.resolve(),
+      exited: exited.promise,
+    }),
+  });
+  await stopping.promise;
+  const second = harness({ servedReplies: [null, [SERVED_27B]] });
+  const opening = launchMlx(home, ["27b"], {
+    ...second.dependencies,
+    sessionsDir: first.sessionsDir,
+  });
+  try {
+    await Bun.sleep(10);
+    expect(second.events).not.toContain("probe");
+  } finally {
+    exited.resolve(0);
+  }
+  expect(await closing).toBe(0);
+  expect(await opening).toBe(0);
+  expect(second.events).toContain("serve");
 });
 
 test("mlx records its session while claude runs, on a reused server too, and clears it after", async () => {
@@ -612,10 +648,16 @@ test("every Qwen mlx size pairs its model with that model's MTP drafter", () => 
 test("spawnServer keeps the server's stdout and stderr in order in one fresh log", async () => {
   const logFile = join(mkdtempSync(join(tmpdir(), "claude-lite-mlx-log-")), "server.log");
   writeFileSync(logFile, "previous run\n");
+  const previousWriter = openSync(logFile, "a");
   const script =
     "echo starting; sleep 0.1; echo 'APIError: 500 out of memory' >&2; sleep 0.1; echo done";
-  const server = spawnServer(["sh", "-c", script], logFile);
-  await server.exited;
+  try {
+    const server = spawnServer(["sh", "-c", script], logFile);
+    await server.exited;
+    writeFileSync(previousWriter, "Finished server process\n");
+  } finally {
+    closeSync(previousWriter);
+  }
   expect(readFileSync(logFile, "utf8")).toBe("starting\nAPIError: 500 out of memory\ndone\n");
 });
 

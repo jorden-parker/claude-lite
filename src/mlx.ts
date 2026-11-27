@@ -6,9 +6,11 @@ import {
   openSync,
   readFileSync,
   readdirSync,
+  renameSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
+import { randomUUID } from "node:crypto";
 import { homedir, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { createServer as createNetServer, type AddressInfo } from "node:net";
@@ -76,9 +78,12 @@ type MlxDependencies = {
 
 export function spawnServer(argv: string[], logPath: string, env = process.env): MlxServer {
   mkdirSync(dirname(logPath), { recursive: true });
-  const logFd = openSync(logPath, "w");
+  // A server finishing shutdown can still write to its open file descriptor.
+  const nextLog = logPath + "." + randomUUID();
+  const logFd = openSync(nextLog, "wx", 0o600);
   let server: ReturnType<typeof Bun.spawn>;
   try {
+    renameSync(nextLog, logPath);
     server = Bun.spawn(argv, {
       stdin: "ignore",
       stdout: logFd,
@@ -87,6 +92,7 @@ export function spawnServer(argv: string[], logPath: string, env = process.env):
     });
   } finally {
     closeSync(logFd);
+    rmSync(nextLog, { force: true });
   }
   return { exited: server.exited, stop: () => server.kill(), pid: server.pid };
 }
@@ -171,6 +177,51 @@ function recordManagedServer(deps: MlxDependencies, plan: ServerPlan, server: Ml
 function removeManagedServerMarker(sessionsDir: string, server: MlxServer) {
   if (server.pid !== undefined)
     rmSync(managedServerMarkerPath(sessionsDir, server.pid), { force: true });
+}
+
+function stoppingDir(sessionsDir: string) {
+  return join(sessionsDir, "managed", "stopping", mlxPort());
+}
+
+async function stopManagedServer(server: MlxServer, sessionsDir: string, keepIfShared = false) {
+  const dir = stoppingDir(sessionsDir);
+  const marker = server.pid === undefined ? undefined : join(dir, String(server.pid));
+  if (marker) {
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(marker, "");
+  }
+  try {
+    const others = keepIfShared ? countOtherLiveSessions(sessionsDir) : 0;
+    if (others > 0) {
+      console.log(
+        `leaving oMLX running for ${others} other cl mlx session(s) (stop it: ${STOP_HINT})`,
+      );
+      return;
+    }
+    server.stop();
+    await server.exited;
+    removeManagedServerMarker(sessionsDir, server);
+  } finally {
+    if (marker) rmSync(marker, { force: true });
+  }
+}
+
+async function waitForPreviousShutdown(deps: MlxDependencies) {
+  const dir = stoppingDir(deps.sessionsDir);
+  const deadline = Date.now() + 60_000;
+  while (
+    existsSync(dir) &&
+    readdirSync(dir).some((name) => /^\d+$/.test(name) && isProcessAlive(Number(name)))
+  ) {
+    if (Date.now() >= deadline) {
+      console.error(
+        `previous oMLX server on port ${mlxPort()} is still shutting down; see ${logPath()}`,
+      );
+      return false;
+    }
+    await Bun.sleep(100);
+  }
+  return true;
 }
 
 async function withSessionRecorded(sessionsDir: string, runSession: () => Promise<number>) {
@@ -442,6 +493,7 @@ async function ensureServer(deps: MlxDependencies, plan: ServerPlan): Promise<Se
     console.error(`oMLX is not installed; install it with ${OMLX_INSTALL_HINT}`);
     return { kind: "failed" };
   }
+  if (!(await waitForPreviousShutdown(deps))) return { kind: "failed" };
   const alreadyServed = await deps.servedModels();
   if (alreadyServed?.includes(plan.model)) {
     if (plan.size.mlx_engine && plan.size.mlx_engine !== "auto") {
@@ -480,19 +532,8 @@ async function ensureServer(deps: MlxDependencies, plan: ServerPlan): Promise<Se
     console.error(
       `oMLX does not list ${plan.model}; the model is not in the Hugging Face cache as an MLX model; see ${logPath()}`,
     );
-  server.stop();
+  await stopManagedServer(server, deps.sessionsDir);
   return { kind: "failed" };
-}
-
-function stopUnlessShared(server: MlxServer, sessionsDir: string) {
-  const otherSessions = countOtherLiveSessions(sessionsDir);
-  if (otherSessions === 0) {
-    server.stop();
-    removeManagedServerMarker(sessionsDir, server);
-  } else
-    console.log(
-      `leaving oMLX running for ${otherSessions} other cl mlx session(s) (stop it: ${STOP_HINT})`,
-    );
 }
 
 export async function launchMlx(
@@ -515,15 +556,15 @@ export async function launchMlx(
     console.log(JSON.stringify(settings, null, 2));
     return 0;
   }
-  const start = await ensureServer(deps, plan);
-  if (start.kind === "failed") return 1;
-  if (start.kind === "reused")
-    console.log(
-      `reusing the oMLX already serving ${plan.model} on ${mlxUrl()}; it keeps running after claude exits (stop it: ${STOP_HINT})`,
-    );
-  try {
-    return await withSessionRecorded(deps.sessionsDir, () =>
-      runClaudeIn(
+  return await withSessionRecorded(deps.sessionsDir, async () => {
+    const start = await ensureServer(deps, plan);
+    if (start.kind === "failed") return 1;
+    if (start.kind === "reused")
+      console.log(
+        `reusing the oMLX already serving ${plan.model} on ${mlxUrl()}; it keeps running after claude exits (stop it: ${STOP_HINT})`,
+      );
+    try {
+      return await runClaudeIn(
         home,
         plan.size,
         plan.model,
@@ -531,11 +572,11 @@ export async function launchMlx(
         plan.claudeArgs,
         deps.run,
         plan.visionSize?.mlx,
-      ),
-    );
-  } finally {
-    if (start.kind === "started") stopUnlessShared(start.server, deps.sessionsDir);
-  }
+      );
+    } finally {
+      if (start.kind === "started") await stopManagedServer(start.server, deps.sessionsDir, true);
+    }
+  });
 }
 
 export async function serveMlx(
@@ -569,8 +610,7 @@ export async function serveMlx(
   }
   console.log(`oMLX ready at ${mlxUrl()}, serving ${plan.model}; Ctrl-C stops it`);
   const code = await deps.awaitShutdown(start.server);
-  start.server.stop();
-  removeManagedServerMarker(deps.sessionsDir, start.server);
+  await stopManagedServer(start.server, deps.sessionsDir);
   console.log("stopped oMLX");
   return code;
 }
