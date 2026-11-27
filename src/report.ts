@@ -4,8 +4,8 @@ import { randomUUID } from "node:crypto";
 import { collectReport, reportLines } from "./report-data.ts";
 import { renderReport } from "./report-view.ts";
 
-export async function report(userHome: string, home: string) {
-  const data = await collectReport(userHome, home);
+export async function report(userHome: string, home: string, allModels = false) {
+  const data = await collectReport(userHome, home, allModels);
   const path = join(userHome, ".cache", "claude-lite", "reports", "latest.html");
   await mkdir(dirname(path), { recursive: true });
   const temp = path + "." + randomUUID();

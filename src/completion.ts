@@ -88,6 +88,7 @@ export function nextWords(typed: string[], { commands, sizes }: CompletionWords)
   if (command === "ollama" || command === "mlx") return ollamaNext(rest, sizes);
   if (command === "bench") return benchNext(rest, sizes);
   if (command === "serve") return serveNext(rest, sizes);
+  if (command === "report" && !rest.length) return ["--all-models", "--help"];
   if (!commands.includes(command) || rest.length > 0) return [];
   return ["--help"];
 }

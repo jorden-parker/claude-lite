@@ -47,6 +47,8 @@ const isCommand = (word: string | undefined): word is CommandName =>
   word !== undefined && Object.hasOwn(COMMAND_HELP, word);
 
 async function runLifecycle(name: keyof typeof LIFECYCLE, extraArgs: string[], home: string) {
+  if (name === "report" && extraArgs.length === 1 && extraArgs[0] === "--all-models")
+    return await report(process.env.HOME ?? homedir(), home, true);
   if (extraArgs.length > 0) {
     console.error(COMMAND_HELP[name]);
     return 2;

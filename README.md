@@ -11,7 +11,7 @@ An Ollama launcher for Claude Code, in TypeScript and Bun. Hooks, rules and styl
     cl update                    # git pull --ff-only, bun install, build, install
     cl uninstall                 # removes what install added and the server env login agent that cl servers writes
     cl doctor                    # checks the build, shell completion, the cl link, config files, Ollama version, one startup source and the server env, and the last `cl mlx` log, which fails when oMLX stored no prompt cache; prints the Ollama sandbox and permission mode
-    cl report                    # opens a local HTML snapshot of oMLX activity and recent file reads
+    cl report                    # opens a local HTML snapshot of local sessions, tool problems and model activity
     cl logs                      # follows local Ollama and cl mlx server output, even when logging starts later
     cl servers                   # finds duplicate Ollama servers on port 11434; checks the server responds; sets the server env (keep-alive, one parallel request, flash attention, q8 KV cache, one loaded model; flash attention and the q8 KV cache reach only GGUF sizes like `9b`, not the MLX `27b` and `35b`) and writes a login agent that sets it again after a reboot
     cl stop                      # kills the cl mlx oMLX server and every Ollama process (reopen Ollama before cl ollama)
@@ -172,11 +172,15 @@ whose `old_string` exists, code without comments, a short direct answer, a bound
 test file, and a bounded retry after a denied unbounded `git log` (the denial is the rule in `src/ollama/git-log-guard.ts`). `--json` prints the raw per-task numbers. `--runs <n>` repeats every task and prints a pass count per task. Every run is saved under `~/.cache/claude-lite/bench`, and `--compare` prints the change from the previous run of the same model. Use it before and after changing a size's base model,
 parameters or `config/system-prompt.md`; thinking and effort layer the same way as for `cl ollama`. The benchmark applies the size’s context, output limit and sampling through Ollama request options or oMLX model settings, including overrides from `config/local-sizes.json`.
 
-#### Diagnose a slow Read
+#### Diagnose a slow or failed tool call
 
-While the session is running, open a second terminal in the directory where you launched `cl mlx` and run `cl report`. It opens a standalone HTML snapshot on macOS and prints its path. The latest snapshot is saved at `~/.cache/claude-lite/reports/latest.html`. When output is redirected, the command only prints the summary and path. `cl doctor` includes the terminal summary.
+Run `cl report` from any directory on the Mac running the models. It examines recorded local-model sessions across projects and opens an offline HTML snapshot at `~/.cache/claude-lite/reports/latest.html`. Redirected output includes the terminal summary and report path. `cl doctor` also includes the terminal summary.
 
-The report matches Claude Code Read calls to their tool results by ID. It inspects the latest matching main-session transcript among the 12 most recently modified transcripts in the project, up to the last 4 MiB per file. The timestamps help distinguish an earlier session from the one on screen. A missing result alone cannot identify a permission dialog or a hook. The two oMLX samples, about a second apart, cover all server requests. Prompt and cache counter changes become visible as requests finish. The HTML contains timing and status metadata and opens offline.
+Use `cl report --all-models` to include every model recorded by Claude Code, Qwen Code and OpenCode v2, including older aliases and cloud-backed sessions stored on this Mac. The default view matches local model names from the launcher or running servers and recognized local OpenCode providers.
+
+Expand a session to see flagged calls, their timestamps, and recent successful calls. The report flags explicit errors, calls without a recorded result, and successful calls that took at least 60 seconds to return. That interval can include permission prompts and hooks. A missing result can also come from an interrupted session. A live badge requires evidence from the client.
+
+The report includes tool names, session identifiers, project names and timings. It omits prompts, tool arguments and result bodies. The oMLX activity counters cover the whole server and update as requests finish.
 
 #### Compare the 27B engines
 
