@@ -11,7 +11,7 @@ An Ollama launcher for Claude Code, in TypeScript and Bun. Hooks, rules and styl
     cl update                    # git pull --ff-only, bun install, build, install
     cl uninstall                 # removes what install added and the server env login agent that cl servers writes
     cl doctor                    # checks the build, shell completion, the cl link, config files, Ollama version, one startup source and the server env, and the last `cl mlx` log, which fails when oMLX stored no prompt cache; prints the Ollama sandbox and permission mode
-    cl logs                      # follows the Ollama logs (launchd plists or Ollama.app) and the cl mlx log
+    cl logs                      # follows local Ollama and cl mlx server output, even when logging starts later
     cl servers                   # finds duplicate Ollama servers on port 11434; checks the server responds; sets the server env (keep-alive, one parallel request, flash attention, q8 KV cache, one loaded model; flash attention and the q8 KV cache reach only GGUF sizes like `9b`, not the MLX `27b` and `35b`) and writes a login agent that sets it again after a reboot
     cl stop                      # kills the cl mlx oMLX server and every Ollama process (reopen Ollama before cl ollama)
     cl fix-servers               # keeps Ollama.app; moves leftover Ollama LaunchAgents to ~/.Trash

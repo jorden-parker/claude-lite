@@ -287,7 +287,7 @@ const touch = (path: string) => {
 const plistWithLogs = (out: string, err: string) =>
   `<?xml version="1.0"?><plist><dict><key>StandardOutPath</key>\n  <string>${out}</string><key>StandardErrorPath</key><string>${err}</string></dict></plist>`;
 
-test("ollamaLogPaths reads plist log paths, adds server.log for Ollama.app, drops missing files", () => {
+test("ollamaLogPaths includes paths that Ollama can create later and deduplicates plist entries", () => {
   const { user, system } = ollamaRoots();
   const agentLog = join(user, "Library/Logs/ollama.log");
   touch(agentLog);
@@ -301,13 +301,14 @@ test("ollamaLogPaths reads plist log paths, adds server.log for Ollama.app, drop
     join(system, "Library/LaunchAgents/homebrew.mxcl.ollama.plist"),
     plistWithLogs(join(system, "missing.log"), join(system, "missing.log")),
   );
-  expect(ollamaLogPaths(user, system)).toEqual([agentLog]);
+  const expected = [agentLog, join(system, "missing.log"), join(user, ".ollama/logs/server.log")];
+  expect(ollamaLogPaths(user, system)).toEqual(expected);
   mkdirSync(join(system, "Applications/Ollama.app"), { recursive: true });
   touch(join(user, ".ollama/logs/server.log"));
-  expect(ollamaLogPaths(user, system)).toEqual([agentLog, join(user, ".ollama/logs/server.log")]);
+  expect(ollamaLogPaths(user, system)).toEqual(expected);
 });
 
-test("logs tails the ollama logs that exist", async () => {
+test("logs follows the oMLX path even when only an Ollama log exists at startup", async () => {
   const { user, system } = ollamaRoots();
   const agentLog = join(user, "Library/Logs/ollama.log");
   touch(agentLog);
@@ -326,7 +327,15 @@ test("logs tails the ollama logs that exist", async () => {
     },
     system,
   );
-  expect(seen).toEqual(["tail", "-F", "-n", "20", agentLog]);
+  expect(seen).toEqual([
+    "tail",
+    "-F",
+    "-n",
+    "20",
+    agentLog,
+    join(user, ".ollama/logs/server.log"),
+    mlxLogPath(user),
+  ]);
   expect(code).toBe(7);
 });
 
@@ -336,14 +345,16 @@ test("logs also tails the mlx server log when it exists", async () => {
   touch(mlxLog);
   const { seen, run } = recordingRunner();
   expect(await logs(user, "/lite", run, system)).toBe(0);
-  expect(seen).toEqual([["tail", "-F", "-n", "20", mlxLog]]);
+  expect(seen).toEqual([["tail", "-F", "-n", "20", join(user, ".ollama/logs/server.log"), mlxLog]]);
 });
 
-test("logs fails without tailing when no ollama log exists", async () => {
+test("logs waits for files when neither backend has started", async () => {
   const { user, system } = ollamaRoots();
   const { seen, run } = recordingRunner();
-  expect(await logs(user, "/lite", run, system)).toBe(1);
-  expect(seen).toEqual([]);
+  expect(await logs(user, "/lite", run, system)).toBe(0);
+  expect(seen).toEqual([
+    ["tail", "-F", "-n", "20", join(user, ".ollama/logs/server.log"), mlxLogPath(user)],
+  ]);
 });
 
 test("ollamaStartupSources finds launch agents, daemons and Ollama.app", () => {

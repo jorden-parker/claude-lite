@@ -79,7 +79,12 @@ export function spawnServer(argv: string[], logPath: string, env = process.env):
   const logFd = openSync(logPath, "w");
   let server: ReturnType<typeof Bun.spawn>;
   try {
-    server = Bun.spawn(argv, { stdin: "ignore", stdout: logFd, stderr: logFd, env });
+    server = Bun.spawn(argv, {
+      stdin: "ignore",
+      stdout: logFd,
+      stderr: logFd,
+      env: { ...env, PYTHONUNBUFFERED: "1" },
+    });
   } finally {
     closeSync(logFd);
   }

@@ -208,11 +208,9 @@ export async function logs(
   run: Runner = spawnRunner,
   systemRoot = "/",
 ): Promise<number> {
-  const paths = [...ollamaLogPaths(userHome, systemRoot), mlxLogPath(userHome)].filter(existsSync);
-  if (paths.length === 0) {
-    console.error("claude-lite: no Ollama or mlx log file found");
-    return 1;
-  }
+  const paths = [...new Set([...ollamaLogPaths(userHome, systemRoot), mlxLogPath(userHome)])];
+  if (!paths.some((path) => existsSync(path)))
+    console.error("claude-lite: waiting for Ollama or oMLX to write its first log");
   return await run(["tail", "-F", "-n", "20", ...paths]);
 }
 
@@ -290,10 +288,7 @@ export function ollamaLogPaths(userHome: string, systemRoot = "/"): string[] {
   const plistLogs = allOllamaPlists(userHome, systemRoot).flatMap((plist) =>
     [...readFileSync(plist, "utf8").matchAll(PLIST_LOG_PATH)].map((match) => match[1]),
   );
-  const appLog = ollamaApps(userHome, systemRoot).length
-    ? [join(userHome, ".ollama/logs/server.log")]
-    : [];
-  return [...new Set([...plistLogs, ...appLog])].filter(existsSync);
+  return [...new Set([...plistLogs, join(userHome, ".ollama/logs/server.log")])];
 }
 
 const OLLAMA_SERVER_ENV: [string, string][] = [
