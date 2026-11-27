@@ -62,6 +62,9 @@ const RENAME_SOURCE = `export function calc(items: number[]): number {
 }
 `;
 
+const ROUTES_FILE = "/repo/src/routes.ts";
+const ROUTES_SOURCE = 'export const healthPath = "/health";\nexport const readyPath = "/ready";\n';
+
 const toolCallsOf = (message: ChatMessage): ToolCall[] => message.tool_calls ?? [];
 const expectOnlyCall = (message: ChatMessage, name: string): ToolCall | string => {
   const made = toolCallsOf(message);
@@ -98,6 +101,35 @@ export const TASKS: BenchTask[] = [
       return argumentText(call, "file_path").endsWith("src/cli.ts")
         ? null
         : `read ${argumentText(call, "file_path")}`;
+    },
+  },
+  {
+    name: "first-edit-after-read",
+    prompt: `In ${ROUTES_FILE}, change the health endpoint path from /health to /healthz. Keep the readiness path as it is.`,
+    history: [
+      {
+        role: "assistant",
+        content: "",
+        tool_calls: [{ function: { name: "Read", arguments: { file_path: ROUTES_FILE } } }],
+      },
+      { role: "tool", tool_name: "Read", content: ROUTES_SOURCE },
+    ],
+    check: (message) => {
+      const call = expectOnlyCall(message, "Edit");
+      if (typeof call === "string") return call;
+      const { file_path, old_string, new_string } = call.function.arguments;
+      if (
+        file_path !== ROUTES_FILE ||
+        typeof old_string !== "string" ||
+        !old_string ||
+        typeof new_string !== "string"
+      )
+        return "expected an applicable edit to the file just read";
+      const parts = ROUTES_SOURCE.split(old_string);
+      return parts.length === 2 &&
+        parts.join(new_string) === ROUTES_SOURCE.replace('"/health"', '"/healthz"')
+        ? null
+        : "edit must change only the health path";
     },
   },
   {
@@ -545,7 +577,7 @@ export async function bench(
       peakSampledModelBytes: peak,
     });
     const turns = [...groupByName(result.tasks)]
-      .filter(([key]) => key.startsWith("coding-"))
+      .filter(([key]) => key.startsWith("coding-") || key === "first-edit-after-read")
       .map(([task, attempts]) => {
         const passed = attempts.filter((a) => a.failure === null);
         return {

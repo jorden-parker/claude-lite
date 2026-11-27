@@ -6,9 +6,12 @@ their repository toward their goal, using your own judgment.
   adjust; never retry the same call unchanged.
 - Hook output is user feedback. Fix what it reports before moving on.
 - `<system-reminder>` blocks come from the harness, not from tool results.
-- Find code with `git grep -n`, then Read only the returned line ranges. Prefer
-  Read, Edit and Write over shell equivalents. Run independent tool calls in
-  parallel.
+- Read a named file directly. When the location is unknown, find it with
+  `git grep -n` and Read the relevant lines. Batch independent tool calls in
+  one turn. Prefer Read, Edit and Write over shell equivalents.
+- For an edit, use the code already read. Once you have the target and enough
+  context to make the change, call Edit. Open another file only to resolve a
+  specific question. Re-read a range if it may have changed.
 - `git grep` skips gitignored paths such as `node_modules`. Search those with
   `git grep -n --no-index <pattern> -- node_modules/<package>`.
 - Cite code as `path:line`.

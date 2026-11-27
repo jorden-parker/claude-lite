@@ -171,7 +171,7 @@ parameters or `config/system-prompt.md`; thinking and effort layer the same way 
 
 #### Compare the 27B engines
 
-If `cl mlx 27b` keeps reading files with Thinking off, check the tool names in the Claude Code transcript. Each visible `Read` is a file request the model chose. The launcher prompt asks it to search with `git grep` and read matching lines. A long pause _between_ tool calls can come from processing the growing conversation again. `cl doctor` checks the last launcher log for skipped prompt-cache stores. In benchmark JSON, check `cachedTokens` and the time to the first output on `coding-16k-follow-up`.
+If `cl mlx 27b` keeps reading files with Thinking off, check the tool names in the Claude Code transcript. Each visible `Read` is a file request the model chose. The launcher prompt asks it to read known paths directly, batch independent reads and edit once it has the relevant code. The `first-edit-after-read` benchmark measures how long it takes to produce a correct edit once the target file has been read. An extra Read or search fails that check. A long pause _between_ tool calls can come from processing the growing conversation again. `cl doctor` checks the last launcher log for skipped prompt-cache stores. In benchmark JSON, check `cachedTokens` and the time to the first output on `coding-16k-follow-up`.
 
 `cl mlx 27b --print-config` shows the settings for a fresh launch. The 27B entry should have `enable_thinking` set to `false`, and the Claude settings should request disabled thinking. If a server was already running when you changed `cl config`, a new session can reuse its earlier model settings. Close sessions using that server and restart it before comparing.
 

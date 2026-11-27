@@ -137,8 +137,11 @@ Bun.serve({hostname:"127.0.0.1",port:Number(arg("--port")),async fetch(req){
   const first=body.messages[1].content;
   const file=typeof first==="string" && first.startsWith("Snapshot ") ?
     body.messages.at(-1).role==="tool" ? "dispatch.ts" : "router.ts" : null;
-  const result=file ? {tool_calls:[{index:0,function:{name:"Read",arguments:JSON.stringify({file_path:file})}}]} : {content:"red blue"};
-  const events=[{choices:[{delta:result}]},{choices:[{delta:{},finish_reason:file?"tool_calls":"stop"}]},
+  const edit=body.messages.at(-1).role==="tool" && body.messages.at(-1).content.includes("export const healthPath");
+  const fn=edit ? {name:"Edit",arguments:JSON.stringify({file_path:"/repo/src/routes.ts",old_string:"/health",new_string:"/healthz"})}
+    : file ? {name:"Read",arguments:JSON.stringify({file_path:file})} : null;
+  const result=fn ? {tool_calls:[{index:0,function:fn}]} : {content:"red blue"};
+  const events=[{choices:[{delta:result}]},{choices:[{delta:{},finish_reason:fn?"tool_calls":"stop"}]},
     {choices:[],usage:{prompt_tokens:4020,completion_tokens:10,generation_duration:0.25,prompt_eval_duration:0.5,prompt_tokens_details:{cached_tokens:4000}}}];
   return new Response(events.map(e=>"data: "+JSON.stringify(e)+"\\n\\n").join("")+"data: [DONE]\\n\\n");
 }});`,
@@ -187,7 +190,11 @@ Bun.serve({hostname:"127.0.0.1",port:Number(arg("--port")),async fetch(req){
       engineEvidence: "native DFlash drafter attached",
       peakSampledModelBytes: 123456,
     });
-    expect(report.turns).toHaveLength(4);
+    expect(report.turns).toHaveLength(5);
+    expect(
+      report.turns.find((t: { task: string }) => t.task === "first-edit-after-read")
+        .toolCallSeconds,
+    ).toBeGreaterThan(0);
     expect(
       report.tasks
         .filter((t: { name: string }) => t.name.startsWith("coding-") || t.name === "vision-colors")

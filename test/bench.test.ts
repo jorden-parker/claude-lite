@@ -48,6 +48,21 @@ test("edit-rename needs an exact old_string and both new names without comments"
   expect(task("edit-rename").check(commented)).toContain("comment");
 });
 
+test("first-edit-after-read requires a usable first edit and preserves the readiness endpoint", () => {
+  const probe = task("first-edit-after-read");
+  const edit = {
+    file_path: "/repo/src/routes.ts",
+    old_string: '"/health"',
+    new_string: '"/healthz"',
+  };
+  expect(probe.check(call("Edit", edit))).toBeNull();
+  expect(probe.check(call("Read", { file_path: edit.file_path }))).toContain("Read");
+  expect(probe.check(call("Edit", { ...edit, old_string: '"/ready"' }))).toContain("health path");
+  expect(probe.check(call("Edit", { ...edit, file_path: "/repo/other.ts" }))).toContain(
+    "file just read",
+  );
+});
+
 test("code-no-comments rejects tools, comments and a missing 400-year rule", () => {
   const good = say(
     "```ts\nfunction isLeapYear(year: number): boolean {\n  return (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;\n}\n```",
@@ -254,9 +269,8 @@ test("bench saves each run and --compare prints the change from the previous one
   }
   expect(requests).toHaveLength(4 * total);
   expect(readdirSync(dir)).toHaveLength(3);
-  expect(printed[2]).toContain("compared with ");
-  expect(printed[2]).toContain(`quality 4/${2 * total} -> 2/${total}`);
-  expect(JSON.parse(printed[3]).comparison).toContain(`quality 2/${total} -> 2/${total}`);
+  expect(printed).toContainEqual(expect.stringContaining(`quality 4/${2 * total} -> 2/${total}`));
+  expect(JSON.parse(printed.at(-1)!).comparison).toContain(`quality 2/${total} -> 2/${total}`);
 });
 
 test("deny-recovery passes only when the next call gets past the unbounded git log rule", () => {
@@ -316,7 +330,7 @@ test("27b benchmarks fresh file reads and replays the actual first call for each
   expect(json.tasks.find((t: { name: string }) => t.name === "vision-colors").failure).toContain(
     "image inputs unavailable",
   );
-  expect(json.turns).toHaveLength(6);
+  expect(json.turns).toHaveLength(7);
   expect(
     json.tasks
       .filter((t: { name: string; failure: string | null }) => t.name.startsWith("coding-"))
