@@ -70,13 +70,18 @@ describe("nextWords", () => {
       "--effort",
       "--runs",
       "--compare",
+      "--backend",
+      "--long-context",
     ]);
     expect(complete("bench", "27b", "--json", "--think", "--compare")).toEqual([
       "--effort",
       "--runs",
+      "--backend",
+      "--long-context",
     ]);
     expect(complete("bench", "27b", "--effort")).toEqual(["low", "medium", "xhigh"]);
     expect(complete("bench", "27b", "--runs")).toEqual([]);
+    expect(complete("bench", "27b", "--backend")).toEqual(["ollama", "mlx"]);
   });
   test("unknown command offers nothing", () => {
     expect(complete("nope")).toEqual([]);

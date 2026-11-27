@@ -4,14 +4,16 @@ import {
   mkdirSync,
   mkdtempSync,
   openSync,
+  readFileSync,
   readdirSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { createServer as createNetServer, type AddressInfo } from "node:net";
 import { COMMAND_HELP } from "./help.ts";
-import { isRemoteHost, unloadModels } from "./ollama/api.ts";
+import { isRemoteHost, ollamaUrl, unloadModels } from "./ollama/api.ts";
 import { renderLaunchSettings, type Runner, runClaude, spawnRunner } from "./ollama/launch.ts";
 import { loadSizes, resolveSize, type Size } from "./ollama/sizes.ts";
 import { runOpenCode } from "./opencode.ts";
@@ -40,7 +42,22 @@ const SAMPLING = ["temperature", "top_p", "top_k", "min_p", "presence_penalty"];
 const CACHE_STORED = "Using boundary cache snapshot for";
 const CACHE_SKIP_REASON = /Skipping cache store.*reason=(\w+)/;
 
-type MlxServer = { exited: Promise<number>; stop: () => void };
+const downloadArgv = (repo: string) => [
+  "uvx",
+  "--python",
+  PYTHON,
+  "--from",
+  "huggingface_hub",
+  "hf",
+  "download",
+  repo,
+];
+
+async function downloadRepo(repo: string, run: Runner = spawnRunner): Promise<number> {
+  return run(downloadArgv(repo));
+}
+
+type MlxServer = { exited: Promise<number>; stop: () => void; pid?: number };
 
 type MlxDependencies = {
   run: Runner;
@@ -54,14 +71,19 @@ type MlxDependencies = {
   awaitShutdown: (server: MlxServer) => Promise<number>;
   sessionsDir: string;
   pollDelayMs: number;
+  listeningPids: () => number[];
 };
 
-export function spawnServer(argv: string[], logPath: string): MlxServer {
+export function spawnServer(argv: string[], logPath: string, env = process.env): MlxServer {
   mkdirSync(dirname(logPath), { recursive: true });
   const logFd = openSync(logPath, "w");
-  const server = Bun.spawn(argv, { stdin: "ignore", stdout: logFd, stderr: logFd });
-  closeSync(logFd);
-  return { exited: server.exited, stop: () => server.kill() };
+  let server: ReturnType<typeof Bun.spawn>;
+  try {
+    server = Bun.spawn(argv, { stdin: "ignore", stdout: logFd, stderr: logFd, env });
+  } finally {
+    closeSync(logFd);
+  }
+  return { exited: server.exited, stop: () => server.kill(), pid: server.pid };
 }
 
 async function fetchServedModels(): Promise<string[] | null> {
@@ -98,6 +120,52 @@ function countOtherLiveSessions(sessionsDir: string): number {
   return readdirSync(sessionsDir)
     .map(Number)
     .filter((pid) => pid !== process.pid && isProcessAlive(pid)).length;
+}
+
+function managedServerMarkerPath(sessionsDir: string, pid: number) {
+  return join(sessionsDir, "managed", `${pid}.json`);
+}
+
+function hasMatchingManagedServer(deps: MlxDependencies, plan: ServerPlan): boolean {
+  const dir = join(deps.sessionsDir, "managed");
+  if (!existsSync(dir)) return false;
+  const listening = new Set(deps.listeningPids());
+  return readdirSync(dir).some((file) => {
+    if (!file.endsWith(".json")) return false;
+    const pid = Number(file.slice(0, -5));
+    if (!Number.isInteger(pid) || !isProcessAlive(pid) || !listening.has(pid)) return false;
+    try {
+      const marker = JSON.parse(readFileSync(join(dir, file), "utf8"));
+      return (
+        marker.pid === pid &&
+        marker.port === mlxPort() &&
+        marker.model === plan.model &&
+        marker.engine === plan.engine
+      );
+    } catch {
+      return false;
+    }
+  });
+}
+
+function recordManagedServer(deps: MlxDependencies, plan: ServerPlan, server: MlxServer) {
+  if (server.pid === undefined) return;
+  const markerPath = managedServerMarkerPath(deps.sessionsDir, server.pid);
+  mkdirSync(dirname(markerPath), { recursive: true });
+  writeFileSync(
+    markerPath,
+    JSON.stringify({
+      pid: server.pid,
+      port: mlxPort(),
+      model: plan.model,
+      engine: plan.engine,
+    }),
+  );
+}
+
+function removeManagedServerMarker(sessionsDir: string, server: MlxServer) {
+  if (server.pid !== undefined)
+    rmSync(managedServerMarkerPath(sessionsDir, server.pid), { force: true });
 }
 
 async function withSessionRecorded(sessionsDir: string, runSession: () => Promise<number>) {
@@ -142,6 +210,17 @@ const DEFAULTS: MlxDependencies = {
   awaitShutdown: waitForShutdown,
   sessionsDir: join(omlxDataDir(homedir()), "sessions"),
   pollDelayMs: 1000,
+  listeningPids: () => {
+    const result = Bun.spawnSync(["lsof", "-nP", "-t", `-iTCP:${mlxPort()}`, "-sTCP:LISTEN"]);
+    return result.exitCode === 0
+      ? new TextDecoder()
+          .decode(result.stdout)
+          .trim()
+          .split(/\s+/)
+          .map(Number)
+          .filter(Number.isFinite)
+      : [];
+  },
 };
 
 export const mlxLogPath = (userHome: string) =>
@@ -163,14 +242,58 @@ const logPath = () => mlxLogPath(homedir());
 
 type ModelSettings = Record<string, number | boolean | string>;
 
-const speculativeDecoding = (size: Size, hasSplash: boolean): ModelSettings => {
-  if (hasSplash && size.mlx_dflash)
-    return { external_engine: SPLASH_ENGINE, dflash_draft_model: servedModelId(size.mlx_dflash) };
-  if (size.mlx_draft) return { vlm_mtp_enabled: true, vlm_mtp_draft_model: size.mlx_draft };
+export type MlxEngine = "auto" | "splash" | "dflash" | "mtp";
+
+function engineFor(
+  size: Size,
+  hasSplash: boolean,
+  strict = true,
+): Exclude<MlxEngine, "auto"> | undefined {
+  const selected = size.mlx_engine ?? "auto";
+  if (!["auto", "splash", "dflash", "mtp"].includes(selected))
+    if (strict)
+      throw new Error(`invalid mlx_engine ${selected}; choose auto, splash, dflash, or mtp`);
+    else return autoEngine(size, hasSplash);
+  const available =
+    selected === "auto" ||
+    (selected === "splash" && hasSplash && Boolean(size.mlx_dflash)) ||
+    (selected === "dflash" && Boolean(size.mlx_dflash)) ||
+    (selected === "mtp" && Boolean(size.mlx_draft));
+  if (!available) {
+    if (strict) {
+      if (selected === "splash" && !hasSplash)
+        throw new Error("mlx_engine splash selected but splash is not installed");
+      throw new Error(`mlx_engine ${selected} selected but its required draft repo is unavailable`);
+    }
+    return autoEngine(size, hasSplash);
+  }
+  return selected === "auto" ? autoEngine(size, hasSplash) : selected;
+}
+
+function autoEngine(size: Size, hasSplash: boolean): Exclude<MlxEngine, "auto"> | undefined {
+  if (size.mlx_dflash && hasSplash) return "splash";
+  if (size.mlx_draft) return "mtp";
+  return undefined;
+}
+
+const speculativeDecoding = (size: Size, engine?: Exclude<MlxEngine, "auto">): ModelSettings => {
+  if (engine === "splash")
+    return { external_engine: SPLASH_ENGINE, dflash_draft_model: servedModelId(size.mlx_dflash!) };
+  if (engine === "dflash")
+    return {
+      dflash_enabled: true,
+      dflash_draft_model: servedModelId(size.mlx_dflash!),
+      dflash_draft_quant_enabled: true,
+      dflash_draft_quant_weight_bits: 4,
+      dflash_draft_quant_group_size: 64,
+      dflash_block_size: 5,
+      dflash_verify_mode: "dflash",
+    };
+  if (engine === "mtp") return { vlm_mtp_enabled: true, vlm_mtp_draft_model: size.mlx_draft! };
   return {};
 };
 
-function modelSettings(size: Size, hasSplash: boolean): ModelSettings {
+function modelSettings(size: Size, engine?: Exclude<MlxEngine, "auto">): ModelSettings {
   const parameters = size.parameters ?? {};
   const sampling = Object.fromEntries(
     Object.entries(parameters).filter(([name]) => SAMPLING.includes(name)),
@@ -182,7 +305,7 @@ function modelSettings(size: Size, hasSplash: boolean): ModelSettings {
     force_sampling: true,
     enable_thinking: size.thinking,
     preserve_thinking: true,
-    ...speculativeDecoding(size, hasSplash),
+    ...speculativeDecoding(size, engine),
   };
 }
 
@@ -193,11 +316,15 @@ export function modelSettingsDocument(
 ) {
   const models: Record<string, ModelSettings> = {};
   for (const size of [...Object.values(sizes), launched])
-    if (size.mlx) models[servedModelId(size.mlx)] = modelSettings(size, hasSplash);
+    if (size.mlx)
+      models[servedModelId(size.mlx)] = modelSettings(
+        size,
+        engineFor(size, hasSplash, size === launched),
+      );
   return { version: 1, models };
 }
 
-function serverCommand(dataDir: string): string[] {
+function serverCommand(dataDir: string, port = mlxPort()): string[] {
   return [
     "omlx",
     "serve",
@@ -206,7 +333,7 @@ function serverCommand(dataDir: string): string[] {
     "--host",
     "127.0.0.1",
     "--port",
-    mlxPort(),
+    port,
     "--paged-ssd-cache-max-size",
     SERVER_SSD_CACHE,
     "--memory-guard",
@@ -231,17 +358,28 @@ async function waitUntilReady(
   }
 }
 
-export const draftRepoOf = (drafted: Size, hasSplash: boolean) =>
-  hasSplash && drafted.mlx_dflash ? drafted.mlx_dflash : drafted.mlx_draft;
+export const draftRepoOf = (drafted: Size, hasSplash: boolean, strict = true) => {
+  const engine = engineFor(drafted, hasSplash, strict);
+  return engine === "splash" || engine === "dflash"
+    ? drafted.mlx_dflash
+    : engine === "mtp"
+      ? drafted.mlx_draft
+      : undefined;
+};
 
 const reposToDownload = (served: (Size | undefined)[], hasSplash: boolean) =>
   served
     .filter((size): size is Size => size !== undefined)
-    .flatMap((size) => [size.mlx, draftRepoOf(size, hasSplash)])
+    .flatMap((size) => [size.mlx, draftRepoOf(size, hasSplash, false)])
     .filter((repo): repo is string => repo !== undefined);
 
 function warnWithoutSplash(name: string, size: Size, hasSplash: boolean) {
-  if (size.mlx_dflash && !hasSplash)
+  if (
+    (size.mlx_engine === undefined || size.mlx_engine === "auto") &&
+    size.mlx_dflash &&
+    size.mlx_draft &&
+    !hasSplash
+  )
     console.error(
       `claude-lite: splash is not installed, so ${name} runs on oMLX's slower MTP engine; install it with ${SPLASH_INSTALL_HINT}`,
     );
@@ -254,6 +392,7 @@ type ServerPlan = {
   model: string;
   visionSize?: Size;
   hasSplash: boolean;
+  engine?: Exclude<MlxEngine, "auto">;
   document: ReturnType<typeof modelSettingsDocument>;
   settingsPath: string;
   command: string[];
@@ -278,6 +417,7 @@ function planServer(home: string, args: string[], hasSplash: boolean): ServerPla
     model: servedModelId(size.mlx),
     visionSize: size.vision_size ? sizes[size.vision_size] : undefined,
     hasSplash,
+    engine: engineFor(size, hasSplash),
     document: modelSettingsDocument(sizes, size, hasSplash),
     settingsPath: join(dataDir, "model_settings.json"),
     command: serverCommand(dataDir),
@@ -299,6 +439,14 @@ async function ensureServer(deps: MlxDependencies, plan: ServerPlan): Promise<Se
   }
   const alreadyServed = await deps.servedModels();
   if (alreadyServed?.includes(plan.model)) {
+    if (plan.size.mlx_engine && plan.size.mlx_engine !== "auto") {
+      if (!hasMatchingManagedServer(deps, plan)) {
+        console.error(
+          `oMLX already serves ${plan.model}, but its engine cannot be verified for explicit mlx_engine=${plan.size.mlx_engine}; stop it before launching`,
+        );
+        return { kind: "failed" };
+      }
+    }
     await unloadOllama(deps.unload);
     return { kind: "reused" };
   }
@@ -309,28 +457,19 @@ async function ensureServer(deps: MlxDependencies, plan: ServerPlan): Promise<Se
     await deps.run(["lsof", "-nP", `-iTCP:${mlxPort()}`, "-sTCP:LISTEN"]);
     return { kind: "failed" };
   }
-  for (const downloadRepo of reposToDownload([plan.size, plan.visionSize], plan.hasSplash).filter(
+  for (const repo of reposToDownload([plan.size, plan.visionSize], plan.hasSplash).filter(
     (repo) => !deps.isRepoCached(repo),
   ))
-    if (
-      (await deps.run([
-        "uvx",
-        "--python",
-        PYTHON,
-        "--from",
-        "huggingface_hub",
-        "hf",
-        "download",
-        downloadRepo,
-      ])) !== 0
-    )
-      return { kind: "failed" };
+    if ((await downloadRepo(repo, deps.run)) !== 0) return { kind: "failed" };
   await unloadOllama(deps.unload);
   deps.writeModelSettings(plan.settingsPath, plan.document);
   console.log(`starting oMLX for ${plan.model}; log: ${logPath()}`);
   const server = deps.startServer(plan.command, logPath());
   const listing = await waitUntilReady(server, deps.servedModels, deps.pollDelayMs);
-  if (listing?.includes(plan.model)) return { kind: "started", server };
+  if (listing?.includes(plan.model)) {
+    recordManagedServer(deps, plan, server);
+    return { kind: "started", server };
+  }
   if (listing === null) console.error(`oMLX exited before it was ready; see ${logPath()}`);
   else
     console.error(
@@ -342,8 +481,10 @@ async function ensureServer(deps: MlxDependencies, plan: ServerPlan): Promise<Se
 
 function stopUnlessShared(server: MlxServer, sessionsDir: string) {
   const otherSessions = countOtherLiveSessions(sessionsDir);
-  if (otherSessions === 0) server.stop();
-  else
+  if (otherSessions === 0) {
+    server.stop();
+    removeManagedServerMarker(sessionsDir, server);
+  } else
     console.log(
       `leaving oMLX running for ${otherSessions} other cl mlx session(s) (stop it: ${STOP_HINT})`,
     );
@@ -355,7 +496,13 @@ export async function launchMlx(
   overrides: Partial<MlxDependencies> = {},
 ): Promise<number> {
   const deps = { ...DEFAULTS, ...overrides };
-  const plan = planServer(home, args, deps.isSplashInstalled());
+  let plan: ServerPlan | undefined;
+  try {
+    plan = planServer(home, args, deps.isSplashInstalled());
+  } catch (error) {
+    console.error(String(error));
+    return 1;
+  }
   if (!plan) return 1;
   const settings = renderLaunchSettings(home, { ...plan.size, model: plan.model }, mlxUrl());
   if (args.includes("--print-config")) {
@@ -397,7 +544,13 @@ export async function serveMlx(
     console.error(COMMAND_HELP.serve);
     return 2;
   }
-  const plan = planServer(home, args, deps.isSplashInstalled());
+  let plan: ServerPlan | undefined;
+  try {
+    plan = planServer(home, args, deps.isSplashInstalled());
+  } catch (error) {
+    console.error(String(error));
+    return 1;
+  }
   if (!plan) return 1;
   if (args.includes("--print-config")) {
     printServerConfig(plan);
@@ -412,8 +565,187 @@ export async function serveMlx(
   console.log(`oMLX ready at ${mlxUrl()}, serving ${plan.model}; Ctrl-C stops it`);
   const code = await deps.awaitShutdown(start.server);
   start.server.stop();
+  removeManagedServerMarker(deps.sessionsDir, start.server);
   console.log("stopped oMLX");
   return code;
+}
+
+export type MlxBenchDependencies = {
+  isOmlxInstalled: () => boolean;
+  isSplashInstalled: () => boolean;
+  ollamaModels: (url: string) => Promise<string[]>;
+  loadedOmlxModels: (url: string) => Promise<number | undefined>;
+  isRepoCached: (repo: string) => boolean;
+  download: (repo: string, signal?: AbortSignal) => Promise<number>;
+  allocatePort: () => Promise<number>;
+  start: (argv: string[], log: string, env: Record<string, string | undefined>) => MlxServer;
+  wait: (url: string, model: string, server: MlxServer, log: string) => Promise<void>;
+  sessionsDir: string;
+};
+
+const defaultBenchDependencies = (): MlxBenchDependencies => ({
+  isOmlxInstalled: () => Bun.which("omlx") !== null,
+  isSplashInstalled: () => Bun.which(SPLASH_ENGINE) !== null,
+  ollamaModels: async (url) => {
+    try {
+      const response = await fetch(`${url}/api/ps`, { signal: AbortSignal.timeout(700) });
+      if (!response.ok) return [];
+      const body = (await response.json()) as { models?: { name: string }[] };
+      return (body.models ?? []).map(({ name }) => name);
+    } catch {
+      return [];
+    }
+  },
+  loadedOmlxModels: async (url) => {
+    try {
+      const response = await fetch(`${url}/api/status`, { signal: AbortSignal.timeout(700) });
+      if (!response.ok) return undefined;
+      const body = (await response.json()) as {
+        models_loaded?: number;
+        loaded_models?: number | unknown[];
+      };
+      if (typeof body.models_loaded === "number") return body.models_loaded;
+      if (typeof body.loaded_models === "number") return body.loaded_models;
+      if (Array.isArray(body.loaded_models)) return body.loaded_models.length;
+      return undefined;
+    } catch {
+      return undefined;
+    }
+  },
+  isRepoCached: (repo) => isRepoInHubCache(hubCacheDir(process.env, homedir()), repo),
+  download: async (repo, signal) =>
+    await Bun.spawn(downloadArgv(repo), {
+      stdin: "ignore",
+      stdout: 2,
+      stderr: 2,
+      signal,
+    }).exited,
+  allocatePort: async () => {
+    const listener = createNetServer();
+    const port = await new Promise<number>((resolve, reject) => {
+      listener.once("error", reject);
+      listener.listen(0, "127.0.0.1", () => resolve((listener.address() as AddressInfo).port));
+    });
+    await new Promise<void>((resolve, reject) =>
+      listener.close((error) => (error ? reject(error) : resolve())),
+    );
+    return port;
+  },
+  start: spawnServer,
+  wait: async (url, model, server, log) => {
+    let hasExited = false;
+    void server.exited.then(() => {
+      hasExited = true;
+    });
+    for (let i = 0; i < 240; i++) {
+      if (hasExited) {
+        const tail = await Bun.file(log)
+          .slice(-2048)
+          .text()
+          .catch(() => "");
+        throw new Error(`benchmark oMLX exited before serving ${model}\n${tail.trim()}`.trim());
+      }
+      try {
+        const response = await fetch(`${url}/v1/models`, { signal: AbortSignal.timeout(700) });
+        if (response.ok) {
+          const body = (await response.json()) as { data?: { id: string }[] };
+          if (body.data?.some(({ id }) => id === model)) return;
+        }
+      } catch {}
+      await Bun.sleep(250);
+    }
+    throw new Error(`benchmark oMLX did not serve ${model}`);
+  },
+  sessionsDir: DEFAULTS.sessionsDir,
+});
+
+/** Runs one benchmark against an isolated oMLX server, leaving stdout to the callback. */
+export async function withMlxBenchServer(
+  sizeName: string,
+  size: Size,
+  run: (url: string, model: string, engine: string, logPath: string) => Promise<number>,
+  overrides: Partial<MlxBenchDependencies> = {},
+): Promise<number> {
+  const deps = { ...defaultBenchDependencies(), ...overrides };
+  const loadedOmlx = await deps.loadedOmlxModels(mlxUrl());
+  if (loadedOmlx !== undefined && loadedOmlx > 0)
+    throw new Error(
+      `benchmark refused: ${loadedOmlx} model(s) are loaded in the standard oMLX server`,
+    );
+  const ollamaModels = isRemoteHost() ? [] : await deps.ollamaModels(ollamaUrl());
+  if (ollamaModels.length)
+    throw new Error(
+      `benchmark refused: local Ollama models are active (${ollamaModels.join(", ")})`,
+    );
+  if (countOtherLiveSessions(deps.sessionsDir) > 0)
+    throw new Error("benchmark refused: a standard claude-lite oMLX session is active");
+  if (!deps.isOmlxInstalled())
+    throw new Error("oMLX is not installed; install it before benchmarking");
+  const repo = size.mlx;
+  if (!repo) throw new Error(`size ${sizeName} has no mlx model`);
+  const hasSplash = deps.isSplashInstalled();
+  const engine = engineFor(size, hasSplash) ?? "none";
+  const model = servedModelId(repo);
+  const draft = draftRepoOf(size, hasSplash);
+  const root = mkdtempSync(join(tmpdir(), "claude-lite-mlx-bench-"));
+  const log = join(root, "server.log");
+  let server: MlxServer | undefined;
+  let signalHandler: (() => void) | undefined;
+  let signalReject: ((reason: Error) => void) | undefined;
+  const interrupted = new Promise<never>((_, reject) => {
+    signalReject = reject;
+  });
+  const downloadController = new AbortController();
+  let activeDownload: Promise<number> | undefined;
+  signalHandler = () => {
+    downloadController.abort();
+    server?.stop();
+    signalReject?.(new Error("benchmark interrupted"));
+  };
+  process.once("SIGINT", signalHandler);
+  process.once("SIGTERM", signalHandler);
+  const guarded = <T>(promise: Promise<T>) => Promise.race([promise, interrupted]);
+  try {
+    const fetchRepo = async (id: string) => {
+      if (deps.isRepoCached(id)) return;
+      const download = deps.download(id, downloadController.signal);
+      activeDownload = download;
+      try {
+        if ((await guarded(download)) !== 0) throw new Error(`failed to download ${id}`);
+      } finally {
+        if (!downloadController.signal.aborted) activeDownload = undefined;
+      }
+    };
+    await fetchRepo(repo);
+    if (draft) await fetchRepo(draft);
+    const port = await guarded(deps.allocatePort());
+    const url = `http://127.0.0.1:${port}`;
+    const document = modelSettingsDocument({ [sizeName]: size }, size, hasSplash);
+    writeModelSettingsFile(join(root, "model_settings.json"), document);
+    const argv = [
+      ...serverCommand(root, String(port)),
+      "--paged-ssd-cache-dir",
+      join(root, "cache"),
+    ];
+    const cacheDir = hubCacheDir(process.env, homedir());
+    const env = {
+      ...process.env,
+      HF_HOME: process.env.HF_HOME || join(homedir(), ".cache", "huggingface"),
+      HF_HUB_CACHE: cacheDir,
+    };
+    server = deps.start(argv, log, env);
+    await guarded(deps.wait(url, model, server, log));
+    return await guarded(run(url, model, engine, log));
+  } finally {
+    process.removeListener("SIGINT", signalHandler);
+    process.removeListener("SIGTERM", signalHandler);
+    if (server) {
+      server.stop();
+      await server.exited.catch(() => -1);
+    }
+    if (activeDownload) await activeDownload.catch(() => -1);
+    rmSync(root, { recursive: true, force: true });
+  }
 }
 
 function waitForShutdown(server: MlxServer): Promise<number> {

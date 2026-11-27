@@ -19,6 +19,8 @@ export type ChatMessage = {
   role: "system" | "user" | "assistant" | "tool";
   content: string;
   thinking?: string;
+  images?: string[];
+  tool_name?: string;
   tool_calls?: ToolCall[];
 };
 
@@ -39,6 +41,9 @@ export type ChatReply = {
   eval_duration?: number;
   total_duration?: number;
   first_token_seconds?: number;
+  tool_call_seconds?: number;
+  tool_call_error?: string;
+  cached_tokens?: number;
 };
 
 export type OllamaApi = {
@@ -84,7 +89,7 @@ export function mergeChunks(chunks: ChatReply[]): ChatReply {
   };
 }
 
-async function* replyLines(response: Response): AsyncGenerator<string> {
+export async function* replyLines(response: Response): AsyncGenerator<string> {
   const decoder = new TextDecoder();
   let pending = "";
   for await (const bytes of response.body as unknown as AsyncIterable<Uint8Array>) {
@@ -93,7 +98,7 @@ async function* replyLines(response: Response): AsyncGenerator<string> {
     pending = lines.pop() ?? "";
     yield* lines;
   }
-  yield pending;
+  yield pending + decoder.decode();
 }
 
 export async function streamChat(
@@ -104,20 +109,32 @@ export async function streamChat(
   const startedAt = performance.now();
   const response = await fetch(`${baseUrl}/api/chat`, {
     method: "POST",
+    timeout: 30 * 60 * 1000,
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ ...request, stream: true }),
   });
   const chunks: ChatReply[] = [];
-  let firstChunkAt = startedAt;
+  let firstTokenSeconds: number | undefined;
+  let toolCallSeconds: number | undefined;
   for await (const line of replyLines(response)) {
     if (!line.trim()) continue;
     const chunk = JSON.parse(line);
     if (typeof chunk.error === "string") throw new Error(chunk.error);
-    if (chunks.length === 0) firstChunkAt = performance.now();
+    if (!chunk.message) continue;
+    const seconds = (performance.now() - startedAt) / 1000;
+    if (chunk.message.content || chunk.message.thinking || chunk.message.tool_calls?.length)
+      firstTokenSeconds ??= seconds;
+    if (chunk.message.tool_calls?.length) toolCallSeconds ??= seconds;
     chunks.push(chunk);
     hearChunk(chunk);
   }
-  return { ...mergeChunks(chunks), first_token_seconds: (firstChunkAt - startedAt) / 1000 };
+  if (!response.ok || !chunks.length)
+    throw new Error(`Ollama returned no chat reply (HTTP ${response.status})`);
+  return {
+    ...mergeChunks(chunks),
+    first_token_seconds: firstTokenSeconds,
+    tool_call_seconds: toolCallSeconds,
+  };
 }
 
 export async function unloadModels(baseUrl = ollamaUrl()): Promise<string[]> {

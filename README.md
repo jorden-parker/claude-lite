@@ -110,15 +110,15 @@ Runs the size's `mlx` model (an `mlx-community` 4-bit build named in `config/siz
 Check that a Homebrew install has the kernels with `/opt/homebrew/opt/omlx/libexec/bin/python -c "from omlx.custom_kernels import native_kernel_status; print(native_kernel_status())"`. Nothing is installed into the repo.
 
 1. Checks that `omlx` is on PATH, then `127.0.0.1:8435/v1/models` (`CLAUDE_LITE_MLX_PORT` changes the port; 11435 is taken by Ollama's llama.cpp runner). An oMLX already serving the size's model (a second `cl mlx` session on the same size, or one left by an interrupted run) is reused and keeps running after `claude` exits; stop it with `cl stop`. oMLX batches the sessions' requests, so two sessions generate at the same time. Anything else on the port stops the launch, and `lsof` names the process.
-2. Downloads the model, and the size's drafter (its `mlx_dflash` DFlash2 draft when `splash` is on PATH, otherwise its `mlx_draft` MTP drafter), with `uvx --from huggingface_hub hf download` (cached in `~/.cache/huggingface`; shows progress the first time). It downloads only repos missing from that cache or left incomplete; to fetch a newer upstream revision of a cached repo, run `hf download <repo>` by hand. oMLX reads that Hugging Face cache and serves the model under the id `org--name`, the repo id with each `/` replaced by `--` (for example `mlx-community--Qwen3.6-35B-A3B-4bit`); `claude` and `qwen` are given that id.
+2. Downloads the model, and the size's drafter (its `mlx_dflash` draft for native DFlash2 or Splash, or its `mlx_draft` drafter for MTP), with `uvx --from huggingface_hub hf download` (cached in `~/.cache/huggingface`; shows progress the first time). It downloads only repos missing from that cache or left incomplete; to fetch a newer upstream revision of a cached repo, run `hf download <repo>` by hand. oMLX reads that Hugging Face cache and serves the model under the id `org--name`, the repo id with each `/` replaced by `--` (for example `mlx-community--Qwen3.6-35B-A3B-4bit`); `claude` and `qwen` are given that id.
 3. Unloads every model loaded in a local Ollama (`/api/ps`, then `keep_alive: 0`) so they don't share memory with MLX; Ollama being down or idle is fine.
-4. Writes `~/.cache/claude-lite/omlx/model_settings.json` with an entry for every mlx size, keyed by that id: its context, output tokens and sampling, with `force_sampling` on so the size's sampling wins over what `claude` sends, and thinking from the size or `--think`/`--no-think`. A size with `mlx_draft` (each size uses its model's `-MTP-4bit` drafter, for example `mlx-community/Qwen3.8-27B-MTP-4bit`, 0.3 GB) also gets `vlm_mtp_enabled` and `vlm_mtp_draft_model`, so oMLX drafts tokens with that multi-token-prediction head and the model only verifies them: same output, faster decode. oMLX logs `VLM MTP drafter loaded` when it takes, and ignores the setting with a warning when it can't load the drafter. A size with `mlx_dflash` (the `27b`, with `incoai/Qwen3.8-27B-DFlash2`, 3.8 GB, and the default `35b`, with `incoai/Qwen3.6-35B-A3B-DFlash2`, 1.1 GB) is served through [Splash](https://github.com/incoai/splash) instead when `splash` is on PATH (`brew install incoai/tap/splash`, 1.3.0 or newer, M3 or later): its entry gets `external_engine: "splash"` and `dflash_draft_model` and no MTP keys, because oMLX's MTP settings do not apply while Splash serves the model. oMLX then starts `splash serve` itself and forwards requests to it, so `claude`, `--qwen` and `--opencode` keep the same port and model id. Without `splash` the launcher says so and the size stays on the MTP drafter. oMLX does not fall back on its own: if Splash is installed but cannot serve the model (too old, or the draft is missing), the first request fails with oMLX's reason. The file is rewritten on every start, so edits to it or in the oMLX admin UI are overwritten; change the size in `config/sizes.json` or `config/local-sizes.json` instead.
+4. Writes `~/.cache/claude-lite/omlx/model_settings.json` with an entry for every mlx size, keyed by that id: its context, output tokens and sampling, with `force_sampling` on so the size's sampling wins over what `claude` sends, and thinking from the size or `--think`/`--no-think`. A size using MTP (with its model's `-MTP-4bit` drafter, for example `mlx-community/Qwen3.8-27B-MTP-4bit`, 0.3 GB) also gets `vlm_mtp_enabled` and `vlm_mtp_draft_model`, so oMLX drafts tokens with that multi-token-prediction head and the model only verifies them: same output, faster decode. oMLX logs `VLM MTP drafter loaded` when it takes, and ignores the setting with a warning when it can't load the drafter. In automatic mode, a size with `mlx_dflash` (the `27b`, with `incoai/Qwen3.8-27B-DFlash2`, 3.8 GB, and the default `35b`, with `incoai/Qwen3.6-35B-A3B-DFlash2`, 1.1 GB) is served through [Splash](https://github.com/incoai/splash) instead when `splash` is on PATH (`brew install incoai/tap/splash`, 1.3.0 or newer, M3 or later): its entry gets `external_engine: "splash"` and `dflash_draft_model` and no MTP keys, because oMLX's MTP settings do not apply while Splash serves the model. oMLX then starts `splash serve` itself and forwards requests to it, so `claude`, `--qwen` and `--opencode` keep the same port and model id. In automatic mode without `splash`, the size uses the MTP drafter. The 27B preset selects native DFlash2 by default. oMLX does not fall back on its own: if Splash is installed but cannot serve the model (too old, or the draft is missing), the first request fails with oMLX's reason. The file is rewritten on every start, so edits to it or in the oMLX admin UI are overwritten; change the size in `config/sizes.json` or `config/local-sizes.json` instead.
 5. Starts `omlx serve --base-path ~/.cache/claude-lite/omlx --host 127.0.0.1 --port 8435 --paged-ssd-cache-max-size 20GB --memory-guard aggressive` in the background. The data dir holds the settings and the SSD prompt cache, capped at 20 GB. `aggressive` keeps only about 2% of RAM free for other apps and may compress half their memory, so the 35b fits under oMLX's memory ceiling; the default `balanced` tier refuses it when other apps hold a lot of RAM. The server log is `~/.cache/claude-lite/mlx-server.log`.
 6. Waits for `/v1/models` to list the id (if it does not, the model is not an MLX model in the Hugging Face cache and the launch stops), runs `claude` with the same settings, system prompt and tools as `cl ollama`, and stops the server when `claude` exits, unless another `cl mlx` session still uses it (each session leaves its pid in `~/.cache/claude-lite/omlx/sessions`); the server then keeps running until `cl stop`. Closing the terminal of the session that started the server can still end it for the others.
 
 `cl serve` runs the steps above up to the ready check, then prints `oMLX ready at http://127.0.0.1:8435, serving <id>; Ctrl-C stops it` and stays in the foreground for other apps to use the server, without `claude`. Ctrl-C (or the server exiting) stops the server it started. A `cl mlx` session started meanwhile reuses it and leaves it running. An oMLX already serving the size's model is reused and `cl serve` exits 0 at once.
 
-`cl bench` still measures only Ollama.
+`cl bench 27b --backend mlx` measures oMLX in a temporary server with its own port, log and prompt cache.
 
 #### T3 Code
 
@@ -138,9 +138,19 @@ T3 Code starts `claude` itself, so the launcher's sandbox, permissions, secret d
 
 None of these numbers were measured with claude-lite. Time a real task before and after.
 
-- **Splash is the biggest lever.** Its [README](https://github.com/incoai/splash#performance) reports, on an M5 Pro with 48 GB and short prompts, 210 tok/s for Qwen3.6-35B-A3B (1.7x the next-fastest engine it measured) and 74 tok/s for Qwen3.8-27B (2.0x). Those are vendor numbers. With `splash` installed, `cl mlx 35b` and `cl mlx 27b` use it; `40b` (Flint) stays on oMLX's own engine, because Splash serves Flint only as a GGUF.
+- **Splash is the biggest lever.** Its [README](https://github.com/incoai/splash#performance) reports, on an M5 Pro with 48 GB and short prompts, 210 tok/s for Qwen3.6-35B-A3B (1.7x the next-fastest engine it measured) and 74 tok/s for Qwen3.8-27B (2.0x). Those are vendor numbers. With `splash` installed, `cl mlx 35b` uses it and `27b` can opt in; `40b` (Flint) stays on oMLX's own engine, because Splash serves Flint only as a GGUF.
 - **The model matters more than the runtime.** One [M4 Max test](https://www.youtube.com/watch?v=DKgtZ2atxlY) of Ollama, LM Studio, llama.cpp and MLX found the tool changes speed by about 15% at most and the model by three to four times. `35b` and `40b` are mixture-of-experts models with about 3B parameters active per token; `27b` is dense and slower.
 - **Animated wallpaper.** One [report](https://x.com/heyvictortorres/status/2112558446872596767) on an M2 Max with oMLX saw the same model run about 40% slower while an animated Aerial wallpaper was playing. If speed drops for no reason, switch to a still wallpaper and compare.
+
+#### 27B on an M4 Pro with 48 GB
+
+Both `cl mlx 27b` and `cl serve 27b` use native DFlash2 by default. The tracked 27B preset selects the IncoAI drafter with 4-bit draft quantization, groups of 64 and a five-token block. Start a fresh server after updating. The settings target oMLX 0.8.4. [oMLX DFlash settings](https://github.com/jundot/omlx/blob/v0.8.4/docs/experimental/dflash_mlx_integration.md)
+
+For a per-machine override, set the 27B `mlx_engine` in `config/local-sizes.json` to `mtp`, `splash` or `auto`. Automatic selection uses Splash when installed and MTP otherwise. The official Splash build requires macOS 26.4 or later on M3 and newer Macs. [Splash requirements](https://github.com/incoai/splash/blob/1.7.3/README.md#quick-start)
+
+A published 20-core M4 Pro MacBook Pro run reached 45.3 generated tokens/s on native DFlash2. At 16K tokens, the first answer started after 126.8 s and a follow-up using the cached prefix started after 1.26 s. Those measurements used oMLX 0.7.1rc1. [Raw M4 Pro run](https://github.com/nace-ai/kapitsa/blob/main/bench/results/2026-10-17/q38-27b-omlx-best-20261017-222043.json)
+
+Ollama already uses `qwen3.8:27b-dflash2-nvfp4`. Its MLX runner verifies seven draft proposals for this model. Ollama 0.40.18 is a suitable comparison version and includes the large-vocabulary sampling improvement from 0.40.14. [Ollama DFlash2 measurements](https://github.com/ollama/ollama/pull/19149) · [Sampling improvement](https://github.com/ollama/ollama/pull/19392)
 
 #### Known oMLX issues
 
@@ -150,14 +160,33 @@ None of these numbers were measured with claude-lite. Time a real task before an
 
 ### Measure a size
 
-    cl bench [27b|35b|9b|40b] [--think|--no-think] [--effort <level>] [--runs <n>] [--compare] [--json]
+    cl bench [27b|35b|9b|40b] [--backend ollama|mlx] [--engine splash|dflash|mtp] [--long-context] [--think|--no-think] [--effort <level>] [--runs <n>] [--compare] [--json]
 
 Runs the size's model through Ollama's chat API with the launcher's system prompt and tool schemas for Bash, Read,
 Edit and Write, then prints a PASS/FAIL line per task with its speed and time to first token, `quality passed/total`, generation and prompt tokens per
 second and load time. The tasks check what Claude Code needs from a local model: picking the right tool, an `Edit`
 whose `old_string` exists, code without comments, a short direct answer, a bounded `grep` instead of `cat`, a
 test file, and a bounded retry after a denied unbounded `git log` (the denial is the rule in `src/ollama/git-log-guard.ts`). `--json` prints the raw per-task numbers. `--runs <n>` repeats every task and prints a pass count per task. Every run is saved under `~/.cache/claude-lite/bench`, and `--compare` prints the change from the previous run of the same model. Use it before and after changing a size's base model,
-parameters or `config/system-prompt.md`; thinking and effort layer the same way as for `cl ollama`. The bench sends the size's parameters (context, output tokens, sampling) as request options, so overrides in `config/local-sizes.json` are measured.
+parameters or `config/system-prompt.md`; thinking and effort layer the same way as for `cl ollama`. The benchmark applies the size’s context, output limit and sampling through Ollama request options or oMLX model settings, including overrides from `config/local-sizes.json`.
+
+#### Compare the 27B engines
+
+If `cl mlx 27b` keeps reading files with Thinking off, check the tool names in the Claude Code transcript. Each visible `Read` is a file request the model chose. The launcher prompt asks it to search with `git grep` and read matching lines. A long pause _between_ tool calls can come from processing the growing conversation again. `cl doctor` checks the last launcher log for skipped prompt-cache stores. In benchmark JSON, check `cachedTokens` and the time to the first output on `coding-16k-follow-up`.
+
+`cl mlx 27b --print-config` shows the settings for a fresh launch. The 27B entry should have `enable_thinking` set to `false`, and the Claude settings should request disabled thinking. If a server was already running when you changed `cl config`, a new session can reuse its earlier model settings. Close sessions using that server and restart it before comparing.
+
+Run each engine on the work Mac with the others idle. The MLX benchmark starts and cleans up a private server. It uses the same weights cache as the launcher. The engine flag applies to this benchmark invocation. For the Ollama run, first create the configured alias with `cl ollama 27b` if needed.
+
+```sh
+cl bench 27b --backend mlx --engine mtp --runs 5
+cl bench 27b --backend mlx --engine dflash --runs 5 --compare
+cl bench 27b --backend mlx --engine splash --runs 5 --compare
+cl bench 27b --backend ollama --runs 5
+```
+
+Each 27B run includes approximately 4K and 16K tokens of synthetic source. Each trial varies an identifier near the start and then replays the observed Read call with a short tool result. The follow-up must read the imported file. A separate image checks both panel colors in order. Use `--long-context` to add one 48K pair under your usual app load. Use `--json` to see per-request measurements, the selected engine, runtime evidence when available, and configuration. An unconfirmed run lacks evidence that its drafter ran. Peak sampled model memory comes from the serving API and excludes process memory that API does not count.
+
+Compare median turn time, time to first output and time to a complete tool call at both prompt lengths. The medians use successful turns. Keep a native DFlash setting on the work Mac if it cuts median coding-turn time by at least 10%, the tool and image checks pass at least as often as before, and cached follow-ups stay within 10% of the baseline. For a close result, alternate one run per engine in each of five rounds to control for temperature and background work. Bench history is kept separately by backend for comparison.
 
 #### A/B test speed tweaks
 

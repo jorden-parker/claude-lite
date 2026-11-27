@@ -1,5 +1,13 @@
 import { expect, test } from "bun:test";
-import { cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -14,8 +22,10 @@ import {
   serveMlx,
   servedModelId,
   spawnServer,
+  withMlxBenchServer,
 } from "../src/mlx.ts";
 import type { Runner } from "../src/ollama/launch.ts";
+import type { MlxBenchDependencies } from "../src/mlx.ts";
 import { loadSizes, resolveSize } from "../src/ollama/sizes.ts";
 
 const home = join(import.meta.dir, "..");
@@ -562,21 +572,18 @@ test("modelSettingsDocument turns on MTP speculative decoding with a size's mlx_
   expect(document.models[SERVED_35B].vlm_mtp_draft_model).toBe("mlx-community/Drafter-MTP-4bit");
 });
 
-test("mlx downloads a size's mlx_draft drafter after its model", async () => {
+test("mlx downloads the default 27b native DFlash2 drafter after its model", async () => {
   const { calls, dependencies } = harness();
   await launchMlx(home, ["27b"], dependencies);
   const downloads = calls.filter((argv) => argv[0] === "uvx").map((argv) => argv.at(-1));
-  expect(downloads).toEqual([
-    "mlx-community/Qwen3.8-27B-4bit",
-    "mlx-community/Qwen3.8-27B-MTP-4bit",
-  ]);
+  expect(downloads).toEqual([MODEL_27B, DFLASH_27B]);
 });
 
 test("mlx skips hf download for repos already in the Hugging Face cache", async () => {
   const { calls, dependencies } = harness();
   await launchMlx(home, ["27b"], { ...dependencies, isRepoCached: (repo) => repo === MODEL_27B });
   const downloads = calls.filter((argv) => argv[0] === "uvx").map((argv) => argv.at(-1));
-  expect(downloads).toEqual(["mlx-community/Qwen3.8-27B-MTP-4bit"]);
+  expect(downloads).toEqual([DFLASH_27B]);
 });
 
 test("hubCacheDir prefers HF_HUB_CACHE, then HF_HOME, then the home default", () => {
@@ -632,7 +639,8 @@ test("the 27b size names the DFlash2 draft Splash pairs with Qwen3.8 27B", () =>
 
 test("modelSettingsDocument serves a size with mlx_dflash through Splash when Splash is installed", () => {
   const sizes = loadSizes(home);
-  const settings = modelSettingsDocument(sizes, sizes["27b"], true).models[SERVED_27B];
+  const settings = modelSettingsDocument(sizes, { ...sizes["27b"], mlx_engine: "auto" }, true)
+    .models[SERVED_27B];
   expect(settings.external_engine).toBe("splash");
   expect(settings.dflash_draft_model).toBe("incoai--Qwen3.8-27B-DFlash2");
   expect(settings.vlm_mtp_enabled).toBeUndefined();
@@ -640,9 +648,37 @@ test("modelSettingsDocument serves a size with mlx_dflash through Splash when Sp
 
 test("modelSettingsDocument keeps the MTP drafter and oMLX's own engine when Splash is missing", () => {
   const sizes = loadSizes(home);
-  const settings = modelSettingsDocument(sizes, sizes["27b"], false).models[SERVED_27B];
+  const settings = modelSettingsDocument(sizes, { ...sizes["27b"], mlx_engine: "auto" }, false)
+    .models[SERVED_27B];
   expect(settings.external_engine).toBeUndefined();
   expect(settings.vlm_mtp_enabled).toBe(true);
+});
+
+test("native DFlash uses the oMLX 0.8.4 draft quantization setting names", () => {
+  const sizes = loadSizes(home);
+  const selected = sizes["27b"];
+  expect(selected.mlx_engine).toBe("dflash");
+  const settings = modelSettingsDocument(sizes, selected, false).models[SERVED_27B];
+  expect(settings.dflash_enabled).toBe(true);
+  expect(settings.dflash_draft_quant_enabled).toBe(true);
+  expect(settings.dflash_draft_quant_weight_bits).toBe(4);
+  expect(settings.dflash_draft_quant_group_size).toBe(64);
+  expect(settings.external_engine).toBeUndefined();
+  expect(settings.vlm_mtp_enabled).toBeUndefined();
+});
+
+test("model settings retain MTP for non-launched 9b while using Splash for 35b when available", () => {
+  const sizes = loadSizes(home);
+  const doc = modelSettingsDocument(sizes, sizes["27b"], true).models;
+  expect(doc[servedModelId(sizes["9b"].mlx!)].vlm_mtp_enabled).toBe(true);
+  expect(doc[servedModelId(sizes["35b"].mlx!)].external_engine).toBe("splash");
+});
+
+test("auto does not enable MTP when the selected size has no MTP repository", () => {
+  const size = { ...loadSizes(home)["27b"], mlx_draft: undefined, mlx_engine: "auto" as const };
+  const settings = modelSettingsDocument({ "27b": size }, size, false).models[SERVED_27B];
+  expect(settings.vlm_mtp_enabled).toBeUndefined();
+  expect(settings.vlm_mtp_draft_model).toBeUndefined();
 });
 
 test("modelSettingsDocument leaves a size without mlx_dflash on oMLX's own engine with Splash installed", () => {
@@ -692,7 +728,8 @@ test("claude, qwen and opencode launch 27b on the same server command and model 
   }
   expect(launches[1]).toEqual(launches[0]);
   expect(launches[2]).toEqual(launches[0]);
-  expect(launches[0].settings.models[SERVED_27B].external_engine).toBe("splash");
+  expect(launches[0].settings.models[SERVED_27B].dflash_enabled).toBe(true);
+  expect(launches[0].settings.models[SERVED_27B].external_engine).toBeUndefined();
 });
 
 const SERVED_FLINT = "mlx-community--flint-oQ4e";
@@ -737,4 +774,185 @@ test("mlx 27b defines no image-reader because the model reads images itself", as
   const { calls, dependencies } = harness({ servedReplies: [null, [SERVED_27B]] });
   expect(await launchMlx(home, ["27b"], dependencies)).toBe(0);
   expect(calls.find((argv) => argv[0] === "claude")).not.toContain("--agents");
+});
+
+function benchFixture(): {
+  state: {
+    argv?: string[];
+    env?: Record<string, string | undefined>;
+    log?: string;
+    url?: string;
+    model?: string;
+    downloads: string[];
+    stopped: boolean;
+  };
+  dependencies: MlxBenchDependencies;
+} {
+  let finish!: (code: number) => void;
+  const serverExit = new Promise<number>((resolve) => {
+    finish = resolve;
+  });
+  const state: {
+    argv?: string[];
+    env?: Record<string, string | undefined>;
+    log?: string;
+    url?: string;
+    model?: string;
+    downloads: string[];
+    stopped: boolean;
+  } = {
+    downloads: [],
+    stopped: false,
+  };
+  return {
+    state,
+    dependencies: {
+      isOmlxInstalled: () => true,
+      isSplashInstalled: () => false,
+      ollamaModels: async () => [],
+      loadedOmlxModels: async () => undefined,
+      isRepoCached: (repo: string) => repo === MODEL_27B,
+      download: async (repo: string) => {
+        state.downloads.push(repo);
+        return 0;
+      },
+      allocatePort: async () => 49213,
+      start: (argv: string[], log: string, env: Record<string, string | undefined>) => {
+        state.argv = argv;
+        state.env = env;
+        state.log = log;
+        return {
+          exited: serverExit,
+          stop: () => {
+            state.stopped = true;
+            finish(0);
+          },
+        };
+      },
+      wait: async (url: string, model: string) => {
+        state.url = url;
+        state.model = model;
+      },
+      sessionsDir: mkdtempSync(join(tmpdir(), "claude-lite-bench-sessions-")),
+    },
+  };
+}
+
+test("benchmark stages an isolated base, uses the standard HF cache, downloads a missing drafter, and waits for the served id", async () => {
+  const { state, dependencies } = benchFixture();
+  let callbackArgs: string[] = [];
+  const result = await withMlxBenchServer(
+    "27b",
+    loadSizes(home)["27b"],
+    async (...args) => {
+      callbackArgs = args;
+      return 0;
+    },
+    dependencies,
+  );
+  expect(result).toBe(0);
+  expect(state.downloads).toEqual([DFLASH_27B]);
+  expect(state.model).toBe(SERVED_27B);
+  expect(callbackArgs.slice(0, 3)).toEqual(["http://127.0.0.1:49213", SERVED_27B, "dflash"]);
+  expect(state.argv).toContain("--base-path");
+  expect(state.argv).not.toContain("--model-dir");
+  expect(state.env?.HF_HUB_CACHE).toBe(hubCacheDir(process.env, homedir()));
+  expect(existsSync(state.argv![state.argv!.indexOf("--base-path") + 1])).toBe(false);
+  expect(state.stopped).toBe(true);
+});
+
+test("benchmark refuses active Ollama models at the configured local OLLAMA_HOST", async () => {
+  const previous = process.env.OLLAMA_HOST;
+  process.env.OLLAMA_HOST = "localhost:11555";
+  const { state, dependencies } = benchFixture();
+  dependencies.ollamaModels = async (url: string) => {
+    expect(url).toBe("http://localhost:11555");
+    return ["busy-model"];
+  };
+  try {
+    await expect(
+      withMlxBenchServer("27b", loadSizes(home)["27b"], async () => 0, dependencies),
+    ).rejects.toThrow("Ollama models are active");
+    expect(state.argv).toBeUndefined();
+  } finally {
+    if (previous === undefined) delete process.env.OLLAMA_HOST;
+    else process.env.OLLAMA_HOST = previous;
+  }
+});
+
+test("benchmark checks loaded model count instead of rejecting a discoverable idle oMLX server", async () => {
+  const { state, dependencies } = benchFixture();
+  dependencies.loadedOmlxModels = async () => 2;
+  await expect(
+    withMlxBenchServer("27b", loadSizes(home)["27b"], async () => 0, dependencies),
+  ).rejects.toThrow("2 model(s) are loaded");
+  expect(state.argv).toBeUndefined();
+});
+
+test("benchmark removes its temporary base when startup throws", async () => {
+  const { state, dependencies } = benchFixture();
+  dependencies.start = (argv: string[], log: string) => {
+    state.argv = argv;
+    state.log = log;
+    throw new Error("spawn failed");
+  };
+  await expect(
+    withMlxBenchServer("27b", loadSizes(home)["27b"], async () => 0, dependencies),
+  ).rejects.toThrow("spawn failed");
+  expect(existsSync(state.argv![state.argv!.indexOf("--base-path") + 1])).toBe(false);
+});
+
+test("explicit engine reuse requires a live claude-lite child recorded as the port listener", async () => {
+  const project = mkdtempSync(join(tmpdir(), "claude-lite-engine-reuse-"));
+  mkdirSync(join(project, "config"), { recursive: true });
+  cpSync(join(home, "config", "sizes.json"), join(project, "config", "sizes.json"));
+  cpSync(join(home, "config", "ollama.json"), join(project, "config", "ollama.json"));
+  writeFileSync(
+    join(project, "config", "local-sizes.json"),
+    JSON.stringify({ "27b": { mlx_engine: "dflash" } }),
+  );
+  const { dependencies, calls, serverCommands, sessionsDir } = harness({
+    servedReplies: [[SERVED_27B]],
+  });
+  const managed = join(sessionsDir, "managed");
+  mkdirSync(managed, { recursive: true });
+  writeFileSync(
+    join(managed, `${process.pid}.json`),
+    JSON.stringify({
+      pid: process.pid,
+      port: "8435",
+      model: SERVED_27B,
+      engine: "dflash",
+    }),
+  );
+  expect(
+    await launchMlx(project, ["27b"], {
+      ...dependencies,
+      listeningPids: () => [process.pid],
+    }),
+  ).toBe(0);
+  expect(serverCommands).toHaveLength(0);
+  expect(calls.some((argv) => argv[0] === "uvx")).toBe(false);
+});
+
+test("explicit engine reuse refuses a foreign server without a live process marker", async () => {
+  const project = mkdtempSync(join(tmpdir(), "claude-lite-engine-foreign-"));
+  mkdirSync(join(project, "config"), { recursive: true });
+  cpSync(join(home, "config", "sizes.json"), join(project, "config", "sizes.json"));
+  cpSync(join(home, "config", "ollama.json"), join(project, "config", "ollama.json"));
+  writeFileSync(
+    join(project, "config", "local-sizes.json"),
+    JSON.stringify({ "27b": { mlx_engine: "dflash" } }),
+  );
+  const { dependencies, calls } = harness({ servedReplies: [[SERVED_27B]] });
+  const errors: string[] = [];
+  const originalError = console.error;
+  console.error = (message?: unknown) => errors.push(String(message));
+  try {
+    expect(await launchMlx(project, ["27b"], dependencies)).toBe(1);
+  } finally {
+    console.error = originalError;
+  }
+  expect(errors.join(" ")).toContain("engine cannot be verified");
+  expect(calls.some((argv) => argv[0] === "uvx")).toBe(false);
 });

@@ -285,3 +285,46 @@ test("bench reports the time to the first token when the api measures it", async
   expect(result.tasks[0].firstTokenSeconds).toBe(0.42);
   expect(formatBench(result)).toContain("PASS read-file (20.0 t/s, first token 0.4 s)");
 });
+
+test("27b benchmarks fresh file reads and replays the actual first call for each follow-up", async () => {
+  const { api, requests } = scriptedApi((request) => {
+    if (request.messages.at(-1)?.images) throw new Error("image inputs unavailable");
+    if (request.messages.at(-1)?.role === "tool")
+      return reply(call("Read", { file_path: "dispatch.ts" }), 4);
+    if (request.messages[1].content.startsWith("Snapshot "))
+      return reply(call("Read", { file_path: "./router.ts" }), 4);
+    return reply(say("red blue"), 2);
+  });
+  const dir = historyDir();
+  expect(await bench(home, ["27b", "--long-context", "--runs", "2"], api, dir)).toBe(0);
+  const fresh = requests.filter(
+    (r) => r.messages[1].content.startsWith("Snapshot ") && r.messages.length === 2,
+  );
+  const follow = requests.filter(
+    (r) => r.messages[1].content.startsWith("Snapshot ") && r.messages.length === 4,
+  );
+  expect(fresh).toHaveLength(5);
+  expect(new Set(fresh.map((r) => r.messages[1].content)).size).toBe(5);
+  for (const [i, r] of follow.entries()) {
+    expect(r.messages.slice(0, 2)).toEqual(fresh[i].messages);
+    expect(r.messages[2].tool_calls?.[0].function.arguments.file_path).toBe("./router.ts");
+    expect(r.messages[3].tool_name).toBe("Read");
+  }
+  expect(follow).toHaveLength(5);
+  expect(requests.filter((r) => r.messages[1].images)).toHaveLength(1);
+  const json = await Bun.file(join(dir, readdirSync(dir)[0])).json();
+  expect(json.tasks.find((t: { name: string }) => t.name === "vision-colors").failure).toContain(
+    "image inputs unavailable",
+  );
+  expect(json.turns).toHaveLength(6);
+  expect(
+    json.tasks
+      .filter((t: { name: string; failure: string | null }) => t.name.startsWith("coding-"))
+      .every((t: { failure: string | null }) => t.failure === null),
+  ).toBe(true);
+});
+
+test("bench rejects missing and unknown backend values", async () => {
+  expect(await bench(home, ["27b", "--backend"])).toBe(2);
+  expect(await bench(home, ["27b", "--backend", "other"])).toBe(2);
+});

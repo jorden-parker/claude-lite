@@ -19,6 +19,7 @@ export type Size = {
   mlx?: string;
   mlx_draft?: string;
   mlx_dflash?: string;
+  mlx_engine?: "auto" | "splash" | "dflash" | "mtp";
   vision_size?: string;
   qwen?: boolean;
   opencode?: boolean;
