@@ -1,3 +1,4 @@
+import type { ReportCache } from "./report-cache.ts";
 import { mlxUrl, servedModelId } from "./mlx.ts";
 import { loadSizes } from "./ollama/sizes.ts";
 import { isRemoteHost, ollamaUrl } from "./ollama/api.ts";
@@ -99,6 +100,7 @@ export async function collectReport(
   userHome: string,
   home: string,
   allModels = false,
+  cache?: ReportCache,
 ): Promise<DiagnosticReport> {
   const [samples, ollamaModels] = await Promise.all([sampleWindow(mlxUrl()), loadedOllamaModels()]);
   const models = new Set<string>(ollamaModels);
@@ -121,7 +123,7 @@ export async function collectReport(
   const readers = [claudeSessions, qwenSessions, openCodeSessions];
   const sources = ["Claude Code", "Qwen Code", "OpenCode"];
   const inventories = await Promise.allSettled(
-    readers.map((read) => read(userHome, allModels ? undefined : models)),
+    readers.map((read) => read(userHome, allModels ? undefined : models, cache)),
   );
   for (const [i, inventory] of inventories.entries()) {
     if (inventory.status === "rejected")

@@ -1,3 +1,4 @@
+import { historyReader, type ReportCache } from "./report-cache.ts";
 import { Database } from "bun:sqlite";
 import { readdir, stat } from "node:fs/promises";
 import { basename, join, resolve } from "node:path";
@@ -110,7 +111,9 @@ const missing = (error: unknown) => (error as NodeJS.ErrnoException)?.code === "
 export async function openCodeSessions(
   userHome: string,
   models: Set<string> | undefined,
+  cache?: ReportCache,
 ): Promise<SessionInventory> {
+  const read = historyReader(cache, "opencode", models);
   const inventory: SessionInventory = { sessions: [], warnings: [] };
   const root = join(process.env.XDG_DATA_HOME || join(userHome, ".local/share"), "opencode");
   const override = process.env.OPENCODE_DB;
@@ -133,19 +136,22 @@ export async function openCodeSessions(
     return inventory;
   }
   for (const file of files) {
-    let db: Database | undefined;
     try {
-      if (!(await stat(file)).isFile()) throw Error("not a file");
-      db = new Database(file, { readonly: true });
-      const sessions = db.transaction(() => readDatabase(db!, models))();
-      for (const session of sessions) inventory.sessions.push(session);
+      const result = await read(file, undefined, async () => {
+        if (!(await stat(file)).isFile()) throw Error("not a file");
+        const db = new Database(file, { readonly: true });
+        try {
+          return { sessions: db.transaction(() => readDatabase(db, models))(), warnings: [] };
+        } finally {
+          db.close();
+        }
+      });
+      for (const session of result.sessions) inventory.sessions.push(session);
     } catch (error) {
       if (!missing(error))
         inventory.warnings.push(
           "OpenCode history database could not be read as a supported v2 SQLite database.",
         );
-    } finally {
-      db?.close();
     }
   }
   return inventory;

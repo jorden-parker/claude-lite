@@ -1,3 +1,4 @@
+import { historyReader, type ReportCache } from "./report-cache.ts";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { createReadStream } from "node:fs";
@@ -178,14 +179,26 @@ async function readHistory(
 export async function claudeSessions(
   userHome: string,
   models: Set<string> | undefined,
+  cache?: ReportCache,
 ): Promise<SessionInventory> {
+  const read = historyReader(cache, "claude", models);
   const root = process.env.CLAUDE_CONFIG_DIR || join(userHome, ".claude");
   const projects = join(root, "projects");
   const warnings = new Set<string>();
   const sessions = new Map<string, ReportSession>();
   const live = await liveSessions(root, warnings);
   async function collect(path: string, id: string) {
-    const found = await readHistory(path, id, models, warnings);
+    const history = await read(path, id, async () => {
+      const notices = new Set<string>();
+      const session = await readHistory(path, id, models, notices);
+      return {
+        sessions: session ? [session] : [],
+        warnings: [...notices],
+        retry: notices.has("Some Claude Code transcripts could not be read completely."),
+      };
+    });
+    for (const warning of history.warnings) warnings.add(warning);
+    const found = history.sessions[0];
     if (!found) return;
     if (live.has(found.id)) found.live = true;
     const previous = sessions.get(found.id);

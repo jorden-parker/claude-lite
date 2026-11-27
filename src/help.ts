@@ -13,7 +13,7 @@ export const COMMAND_HELP = {
   uninstall:
     "usage: claude-lite uninstall\n  removes what install added and the server env login agent that cl servers writes",
   report:
-    "usage: claude-lite report [--all-models]\n  inspects recorded local sessions across projects for tool errors, missing results and slow calls, then opens an offline HTML report in an interactive macOS terminal\n  --all-models includes history from every recorded model and provider",
+    "usage: claude-lite report [--all-models] [--live|--snapshot]\n  inspects recorded local sessions across projects for tool errors, missing results and slow calls, and streams updates to a loopback web page in an interactive terminal (opens automatically on macOS)\n  --live streams even with redirected output; --snapshot writes a single offline HTML report (default when redirected)\n  --all-models includes history from every recorded model and provider",
   doctor:
     "usage: claude-lite doctor\n  checks the build, shell completion, the cl link, config files, that Ollama responds with one startup source and the server env, and prints the Ollama sandbox and permission mode",
   logs: "usage: claude-lite logs\n  follows the local Ollama and cl mlx server logs, including files created after the command starts",

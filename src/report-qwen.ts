@@ -1,3 +1,4 @@
+import { historyReader, type ReportCache } from "./report-cache.ts";
 import { createReadStream, type Dirent } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import { hostname } from "node:os";
@@ -177,10 +178,28 @@ async function history(
 export async function qwenSessions(
   userHome: string,
   models: Set<string> | undefined,
+  cache?: ReportCache,
 ): Promise<SessionInventory> {
+  const read = historyReader(cache, "qwen", models);
   const root = join(userHome, ".qwen");
   const warnings = new Set<string>();
   const sessions: ReportSession[] = [];
+  async function collect(path: string, id: string, sidechain = false, parent?: Launch) {
+    const result = await read(path, parent?.model, async () => {
+      const notices = new Set<string>();
+      const launches: Launch[] = [];
+      const session = await history(path, id, models, notices, launches, sidechain, parent);
+      return {
+        sessions: session ? [session] : [],
+        warnings: [...notices],
+        launches,
+        retry: notices.has(unreadable),
+      };
+    });
+    for (const warning of result.warnings) warnings.add(warning);
+    sessions.push(...result.sessions);
+    return result.launches ?? [];
+  }
   const live = new Set<string>();
   for (const file of await entries(join(root, "sessions"), warnings)) {
     if (!file.isFile() || !file.name.endsWith(".json")) continue;
@@ -199,10 +218,7 @@ export async function qwenSessions(
         if (id) live.add(id);
       } else if (file.name.endsWith(".jsonl")) {
         const id = basename(file.name, ".jsonl");
-        const launches: Launch[] = [];
-        const chat = await history(path, id, models, warnings, launches);
-        if (chat) sessions.push(chat);
-        parents.set(id, launches);
+        parents.set(id, await collect(path, id));
       }
     }
     for (const parent of await entries(join(dir, "subagents"), warnings)) {
@@ -212,16 +228,7 @@ export async function qwenSessions(
         if (!file.isFile() || !file.name.endsWith(".jsonl")) continue;
         const id = basename(file.name, ".jsonl");
         const launch = parents.get(parent.name)?.find((l) => id.endsWith("-" + l.callId));
-        const agent = await history(
-          join(dirName, file.name),
-          id,
-          models,
-          warnings,
-          [],
-          true,
-          launch,
-        );
-        if (agent) sessions.push(agent);
+        await collect(join(dirName, file.name), id, true, launch);
       }
     }
   }

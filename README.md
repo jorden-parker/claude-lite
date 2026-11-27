@@ -11,7 +11,7 @@ An Ollama launcher for Claude Code, in TypeScript and Bun. Hooks, rules and styl
     cl update                    # git pull --ff-only, bun install, build, install
     cl uninstall                 # removes what install added and the server env login agent that cl servers writes
     cl doctor                    # checks the build, shell completion, the cl link, config files, Ollama version, one startup source and the server env, and the last `cl mlx` log, which fails when oMLX stored no prompt cache; prints the Ollama sandbox and permission mode
-    cl report                    # opens a local HTML snapshot of local sessions, tool problems and model activity
+    cl report                    # opens a live local dashboard of sessions, tool problems and model activity
     cl logs                      # follows local Ollama and cl mlx server output, even when logging starts later
     cl servers                   # finds duplicate Ollama servers on port 11434; checks the server responds; sets the server env (keep-alive, one parallel request, flash attention, q8 KV cache, one loaded model; flash attention and the q8 KV cache reach only GGUF sizes like `9b`, not the MLX `27b` and `35b`) and writes a login agent that sets it again after a reboot
     cl stop                      # kills the cl mlx oMLX server and every Ollama process (reopen Ollama before cl ollama)
@@ -174,7 +174,9 @@ parameters or `config/system-prompt.md`; thinking and effort layer the same way 
 
 #### Diagnose a slow or failed tool call
 
-Run `cl report` from any directory on the Mac running the models. It examines recorded local-model sessions across projects and opens an offline HTML snapshot at `~/.cache/claude-lite/reports/latest.html`. Redirected output includes the terminal summary and report path. `cl doctor` also includes the terminal summary.
+Run `cl report` from any directory on the Mac running the models. An interactive terminal prints a private loopback URL and opens the live dashboard automatically on macOS. Keep the command running while you inspect a session. New calls, results and runtime samples stream into the open page. Refreshes run one at a time while a browser is connected. The page reconnects after a temporary interruption.
+
+Press Ctrl-C to close the monitor and save the latest captured report at `~/.cache/claude-lite/reports/latest.html`. Use `cl report --snapshot` for a one-time offline copy, or `cl report --live` to stream when output is redirected. Redirected output otherwise retains the one-time summary and file path. `cl doctor` includes the terminal summary.
 
 Use `cl report --all-models` to include every model recorded by Claude Code, Qwen Code and OpenCode v2, including older aliases and cloud-backed sessions stored on this Mac. The default view matches local model names from the launcher or running servers and recognized local OpenCode providers.
 
