@@ -65,5 +65,19 @@
     "memory_gb": 27.0,
     "mlx": "mlx-community/flint-oQ4e",
     "vision_size": "9b"
+  },
+  "ornith": {
+    "base": "ornith-1.5:35b",
+    "model": "ornith-1.5-35b-128k-cc",
+    "context": 131072,
+    "output_tokens": 8192,
+    "thinking": false,
+    "parameters": {
+      "temperature": 0.6,
+      "top_p": 0.95,
+      "top_k": 20
+    },
+    "memory_gb": 28.0,
+    "mlx": "ornith-ai/Ornith-1.5-35B-A3B-MLX-4bit"
   }
 }

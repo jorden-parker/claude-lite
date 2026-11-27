@@ -32,7 +32,7 @@ Older versions wrapped `claude` through an rc function and a CLAUDE.md import. R
 
 ## Launch on Ollama
 
-    claude-lite ollama [27b|35b|9b|40b] [--print-config] [--think|--no-think] [--qwen|--opencode] [--effort <level>] [claude args]
+    claude-lite ollama [27b|35b|9b|40b|ornith] [--print-config] [--think|--no-think] [--qwen|--opencode] [--effort <level>] [claude args]
     claude-lite ollama --print-config 27b   # print Modelfile + settings, no launch
     claude-lite ollama 35b --think -p "hi"
 
@@ -52,6 +52,8 @@ When the load fails, for example because the model needs more memory, the launch
 sizes that do fit instead of starting `claude` against a model that cannot answer.
 It also loads no MCP servers (`--strict-mcp-config`) and turns off the built-in (`@builtin`) plugins your `~/.claude/settings.json` enables,
 so your other plugins keep their slash commands and skills. Plugins add tools, skills and SessionStart output to the first request; turn heavy ones off in `~/.claude/settings.json` if it outgrows the model's context.
+
+Run `cl ollama ornith` or `cl mlx ornith` to use Ornith 1.5 35B-A3B with the usual Claude Code sandbox and permissions. The preset starts with thinking off and an 8,192-token output limit. Add `--think` for tasks that need more reasoning. Its 28 GB memory budget is an estimate for the 128K context window. [Ollama weights](https://ollama.com/library/ornith-1.5:35b) · [Publisher’s 4-bit MLX release](https://huggingface.co/ornith-ai/Ornith-1.5-35B-A3B-MLX-4bit)
 
 Each size sets thinking and effort. Later layers win:
 
@@ -98,9 +100,9 @@ Like Qwen Code, OpenCode runs without claude-lite's permissions, sandbox, secret
 
 ## Launch on MLX directly
 
-    claude-lite mlx [27b|35b|9b|40b] [--print-config] [--think|--no-think] [--qwen|--opencode] [--effort <level>] [claude args]
+    claude-lite mlx [27b|35b|9b|40b|ornith] [--print-config] [--think|--no-think] [--qwen|--opencode] [--effort <level>] [claude args]
     claude-lite mlx 35b --print-config   # print the server command, model settings and settings, no launch
-    claude-lite serve [27b|35b|9b|40b] [--print-config]
+    claude-lite serve [27b|35b|9b|40b|ornith] [--print-config]
 
 Runs the size's `mlx` model (an `mlx-community` 4-bit build named in `config/sizes.json`) through [oMLX](https://github.com/jundot/omlx) 0.7.3 or newer, which serves the Anthropic Messages API that `claude` needs, instead of Ollama. oMLX is not on PyPI, so install it with Homebrew (or the macOS app, as long as it puts `omlx` on PATH):
 
@@ -161,7 +163,7 @@ Ollama already uses `qwen3.8:27b-dflash2-nvfp4`. Its MLX runner verifies seven d
 
 ### Measure a size
 
-    cl bench [27b|35b|9b|40b] [--backend ollama|mlx] [--engine splash|dflash|mtp] [--long-context] [--think|--no-think] [--effort <level>] [--runs <n>] [--compare] [--json]
+    cl bench [27b|35b|9b|40b|ornith] [--backend ollama|mlx] [--engine splash|dflash|mtp] [--long-context] [--think|--no-think] [--effort <level>] [--runs <n>] [--compare] [--json]
 
 Runs the size's model through Ollama's chat API with the launcher's system prompt and tool schemas for Bash, Read,
 Edit and Write, then prints a PASS/FAIL line per task with its speed and time to first token, `quality passed/total`, generation and prompt tokens per
