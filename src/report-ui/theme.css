@@ -1,0 +1,20 @@
+@import "tailwindcss" source(none);
+@source "./*.tsx";
+@theme inline {
+  --color-background: var(--card);
+  --color-card: var(--card);
+  --color-foreground: var(--ink);
+  --color-card-foreground: var(--ink);
+  --color-primary: var(--ink);
+  --color-primary-foreground: var(--card);
+  --color-accent: var(--wash);
+  --color-secondary: var(--wash);
+  --color-muted: var(--wash);
+  --color-secondary-foreground: var(--ink);
+  --color-accent-foreground: var(--ink);
+  --color-muted-foreground: var(--muted);
+  --color-border: var(--border);
+  --color-input: var(--border);
+  --color-ring: var(--muted);
+  --color-destructive: var(--error);
+}

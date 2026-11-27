@@ -52,6 +52,7 @@ test("serves a private live page and streams only changed rows, with full recove
       signal: reconnect.signal,
     });
     const first = decoder.decode((await resumed.body!.getReader().read()).value);
+    expect(first).toContain("event: sync");
     expect(first).toContain("stable");
     expect(first).toContain("changing");
     expect(calls).toBeGreaterThan(0);
@@ -90,6 +91,33 @@ test("keeps the last successful capture during a refresh failure and stops sampl
     expect(attempts).toBe(count);
   } finally {
     tab.abort();
+    await monitor.stop();
+  }
+});
+
+test("requests a fresh capture before presenting an idle monitor as current", async () => {
+  const capture = Promise.withResolvers<DiagnosticReport>();
+  const monitor = startReportMonitor(initial, () => capture.promise, 20);
+  const tab = new AbortController();
+  try {
+    await Bun.sleep(60);
+    const res = await fetch(new URL("events?version=0", monitor.url), { signal: tab.signal });
+    // A snapshot replay and its freshness notification may arrive as separate chunks.
+    const reader = res.body!.getReader();
+    const decoder = new TextDecoder();
+    let first = "";
+    while (!first.includes("event: stale")) first += decoder.decode((await reader.read()).value);
+    expect(first).toContain("event: sync");
+    expect(first).not.toContain("event: patch");
+    expect(first).not.toContain("event: ready");
+
+    capture.resolve({ ...initial, sessions: [] });
+    const next = decoder.decode((await reader.read()).value);
+    expect(next).toContain("event: patch");
+    expect(JSON.parse(next.split("data: ")[1]).order).toEqual([]);
+  } finally {
+    tab.abort();
+    capture.resolve(initial);
     await monitor.stop();
   }
 });

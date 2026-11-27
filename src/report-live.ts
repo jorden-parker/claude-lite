@@ -28,6 +28,7 @@ export function startReportMonitor(
   let latest = initial;
   let parts = reportParts(initial);
   let version = 1;
+  let lastCapture = Date.now();
   let delayed = false;
   let stopped = false;
   let refreshing = false;
@@ -53,8 +54,8 @@ export function startReportMonitor(
       clients.delete(client);
     }
   }
-  function schedule() {
-    if (!timer && !stopped && !refreshing && clients.size) timer = setTimeout(refresh, intervalMs);
+  function schedule(delay = intervalMs) {
+    if (!timer && !stopped && !refreshing && clients.size) timer = setTimeout(refresh, delay);
   }
   async function refresh() {
     timer = undefined;
@@ -68,6 +69,7 @@ export function startReportMonitor(
       latest = data;
       parts = next;
       version++;
+      lastCapture = Date.now();
       delayed = false;
       broadcast(frame("patch", patch));
     } catch {
@@ -112,10 +114,11 @@ export function startReportMonitor(
         {
           start(controller) {
             connection = controller;
-            if (previous !== String(version)) controller.enqueue(frame("patch", changes(parts)));
-            controller.enqueue(frame(delayed ? "stale" : "ready", null));
+            const overdue = Date.now() - lastCapture >= intervalMs * 2;
+            if (previous !== String(version)) controller.enqueue(frame("sync", changes(parts)));
+            controller.enqueue(frame(delayed || overdue ? "stale" : "ready", null));
             clients.add(controller);
-            schedule();
+            schedule(overdue ? 0 : intervalMs);
           },
           cancel() {
             clients.delete(connection);

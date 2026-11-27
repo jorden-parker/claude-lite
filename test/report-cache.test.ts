@@ -1,3 +1,4 @@
+import { startClient } from "./report-process-fixture.ts";
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { Database } from "bun:sqlite";
 import { appendFile, mkdir, mkdtemp, rename, rm, writeFile } from "node:fs/promises";
@@ -65,14 +66,40 @@ test("Claude merge and live flags remain fresh, including completed partial line
   await writeFile(parent, row("root") + "\n{");
   await writeFile(join(agents, "agent.jsonl"), row("agent"));
   await mkdir(join(home, "sessions"));
-  const registry = join(home, "sessions", String(process.pid));
-  await writeFile(registry, JSON.stringify({ sessionId: "main", pid: process.pid }));
+  const child = await startClient(home, "claude");
+  const registry = join(home, "sessions", String(child.pid));
+  const { stdout } = Bun.spawnSync(["/bin/ps", "-o", "lstart=", "-p", String(child.pid)], {
+    env: { ...process.env, LC_ALL: "C", TZ: "UTC" },
+  });
+  const record = {
+    sessionId: "main",
+    pid: child.pid,
+    startedAt: Date.now(),
+    procStart: stdout.toString().trim(),
+  };
+  const register = async (overrides: object) =>
+    writeFile(registry, JSON.stringify({ ...record, ...overrides }));
   const cache = new ReportCache();
   const sample = () => claudeSessions(home, undefined, cache);
-  const first = await sample();
-  expect(first.sessions[0]?.live).toBe(true);
+  let first;
+  try {
+    for (const invalid of [
+      { procStart: "stale-token" },
+      { hostname: "another.invalid" },
+      { pidDomain: "other-domain" },
+      { startedAt: 1 },
+    ]) {
+      await register(invalid);
+      expect((await sample()).sessions[0]?.live).toBeUndefined();
+    }
+    await register({});
+    first = await sample();
+    expect(first.sessions[0]?.live).toBe(true);
+  } finally {
+    child.kill();
+    await child.exited;
+  }
   first.sessions[0]!.tools.length = 0;
-  await rm(registry);
   const second = await sample();
   expect(second.sessions[0]?.live).toBeUndefined();
   expect(second.sessions[0]?.tools).toHaveLength(2);

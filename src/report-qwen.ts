@@ -4,11 +4,9 @@ import { readdir, readFile } from "node:fs/promises";
 import { hostname } from "node:os";
 import { basename, join, win32 } from "node:path";
 import { createInterface } from "node:readline";
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
+import { ownsSession } from "./report-process.ts";
 import type { ReportSession, SessionInventory, ToolEvent } from "./report-session.ts";
 
-const ps = promisify(execFile);
 const unreadable = "Some Qwen Code history could not be read.";
 const malformed = "Some Qwen Code history records could not be parsed.";
 
@@ -21,14 +19,19 @@ async function entries(path: string, warnings: Set<string>): Promise<Dirent[]> {
   }
 }
 
-// Qwen writes both a per-process registry and (in older versions) chat runtime sidecars.
-// Compare the OS process start time to the registration time to reject recycled PIDs.
+// Runtime sidecars are project scoped. Registry slots are authoritative when both exist.
 async function liveId(path: string, registry: boolean, warnings: Set<string>) {
   try {
     const row = JSON.parse(await readFile(path, "utf8"));
+    const schema = registry ? row.schemaVersion : row.schema_version;
+    if (schema != null && schema !== 1) return;
     if (!registry && row.hostname !== hostname()) return;
     const id = registry ? row.sessionId : row.session_id;
-    const since = registry ? row.startedAt : row.started_at * 1000;
+    const since = registry
+      ? row.startedAt
+      : typeof row.started_at === "number"
+        ? row.started_at * 1000
+        : NaN;
     if (
       typeof id !== "string" ||
       !Number.isFinite(since) ||
@@ -36,15 +39,21 @@ async function liveId(path: string, registry: boolean, warnings: Set<string>) {
       row.pid <= 0
     )
       return;
-    if (registry && basename(path) !== row.pid + ".json") return;
-    try {
-      const { stdout } = await ps("ps", ["-p", String(row.pid), "-o", "lstart="], {
-        env: { ...process.env, LC_ALL: "C" },
-      });
-      if (Date.parse(stdout.trim()) <= since) return id;
-    } catch {
-      // A registry entry often outlives its process.
-    }
+    // Qwen's shared slot is PID.json. Independently registered sessions get
+    // a four-byte random slot suffix and can legitimately share a process.
+    if (registry && !new RegExp("^" + row.pid + "(?:-[0-9a-f]{8})?\\.json$").test(basename(path)))
+      return;
+    if (!registry && basename(path) !== id + ".runtime.json") return;
+    if (
+      await ownsSession("qwen", {
+        pid: row.pid,
+        startedAt: since,
+        hostname: row.hostname,
+        procStart: registry ? row.procStart : row.proc_start,
+        pidNs: registry ? row.pidNs : row.pid_ns,
+      })
+    )
+      return { id, pid: row.pid as number };
   } catch {
     warnings.add("Some Qwen Code session registrations could not be read.");
   }
@@ -184,6 +193,7 @@ export async function qwenSessions(
   const root = join(userHome, ".qwen");
   const warnings = new Set<string>();
   const sessions: ReportSession[] = [];
+  const main = new Map<ReportSession, string>();
   async function collect(path: string, id: string, sidechain = false, parent?: Launch) {
     const result = await read(path, parent?.model, async () => {
       const notices = new Set<string>();
@@ -198,14 +208,10 @@ export async function qwenSessions(
     });
     for (const warning of result.warnings) warnings.add(warning);
     sessions.push(...result.sessions);
+    if (!sidechain) for (const session of result.sessions) main.set(session, path);
     return result.launches ?? [];
   }
-  const live = new Set<string>();
-  for (const file of await entries(join(root, "sessions"), warnings)) {
-    if (!file.isFile() || !file.name.endsWith(".json")) continue;
-    const id = await liveId(join(root, "sessions", file.name), true, warnings);
-    if (id) live.add(id);
-  }
+  const runtimeFiles: string[] = [];
   for (const project of await entries(join(root, "projects"), warnings)) {
     if (!project.isDirectory()) continue;
     const dir = join(root, "projects", project.name);
@@ -214,8 +220,7 @@ export async function qwenSessions(
       if (!file.isFile()) continue;
       const path = join(dir, "chats", file.name);
       if (file.name.endsWith(".runtime.json")) {
-        const id = await liveId(path, false, warnings);
-        if (id) live.add(id);
+        runtimeFiles.push(path);
       } else if (file.name.endsWith(".jsonl")) {
         const id = basename(file.name, ".jsonl");
         parents.set(id, await collect(path, id));
@@ -232,6 +237,30 @@ export async function qwenSessions(
       }
     }
   }
-  for (const session of sessions) if (live.has(session.id)) session.live = true;
+  const registered = new Set<number>();
+  const liveIds = new Set<string>();
+  for (const file of await entries(join(root, "sessions"), warnings)) {
+    if (!file.isFile() || !file.name.endsWith(".json")) continue;
+    const id = await liveId(join(root, "sessions", file.name), true, warnings);
+    if (id) {
+      registered.add(id.pid);
+      liveIds.add(id.id);
+    }
+  }
+  const sidecars = new Map<number, string | undefined>();
+  for (const path of runtimeFiles) {
+    const id = await liveId(path, false, warnings);
+    if (!id || registered.has(id.pid)) continue;
+    const chat = path.slice(0, -".runtime.json".length) + ".jsonl";
+    sidecars.set(id.pid, sidecars.has(id.pid) && sidecars.get(id.pid) !== chat ? undefined : chat);
+  }
+  const livePaths = new Set(sidecars.values());
+  const unique = new Map<string, ReportSession | undefined>();
+  for (const [session, path] of main) {
+    if (livePaths.has(path)) session.live = true;
+    if (liveIds.has(session.id))
+      unique.set(session.id, unique.has(session.id) ? undefined : session);
+  }
+  for (const session of unique.values()) if (session) session.live = true;
   return { sessions, warnings: [...warnings] };
 }

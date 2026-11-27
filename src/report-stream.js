@@ -4,11 +4,26 @@
   const list = document.getElementById("session-list");
   const version = document.querySelector('meta[name="report-version"]').content;
   const feed = new EventSource("events?version=" + encodeURIComponent(version));
+  // Also expire the last observation when the socket stays open but captures stall.
+  const staleAfterMs = 15_000;
+  let freshUntil = 0;
+  let expiry;
 
   function setStatus(state, label) {
+    clearTimeout(expiry);
+    document.body.dataset.reportState = state;
     status.dataset.state = state;
     if (status.textContent !== label) status.textContent = label;
+    if (state === "live") {
+      freshUntil = Date.now() + staleAfterMs;
+      expiry = setTimeout(() => setStatus("stale", "Update delayed"), staleAfterMs);
+    }
   }
+
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden && status.dataset.state === "live" && Date.now() >= freshUntil)
+      setStatus("stale", "Update delayed");
+  });
 
   function update(patch) {
     const rows = new Map(Array.from(list.children, (row) => [row.dataset.sessionKey, row]));
@@ -71,11 +86,13 @@
     }
   }
 
+  // Replaying the last snapshot on reconnect carries no evidence of freshness.
+  feed.addEventListener("sync", (event) => update(JSON.parse(event.data)));
   feed.addEventListener("patch", (event) => {
     update(JSON.parse(event.data));
-    setStatus("live", "Live");
+    setStatus("live", "Streaming");
   });
-  feed.addEventListener("ready", () => setStatus("live", "Live"));
+  feed.addEventListener("ready", () => setStatus("live", "Streaming"));
   feed.addEventListener("stale", () => setStatus("stale", "Update delayed"));
   feed.onerror = () => setStatus("reconnecting", "Reconnecting");
 })();

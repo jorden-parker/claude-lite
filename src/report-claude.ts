@@ -1,13 +1,11 @@
 import { historyReader, type ReportCache } from "./report-cache.ts";
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
+import { ownsSession } from "./report-process.ts";
 import { createReadStream } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { createInterface } from "node:readline";
 import type { ReportSession, SessionInventory, ToolEvent } from "./report-session.ts";
 
-const ps = promisify(execFile);
 const identifier = (value: unknown) =>
   typeof value === "string" && /^[\w.:-]{1,200}$/.test(value) ? value : undefined;
 const projectName = (cwd: unknown) => {
@@ -27,7 +25,7 @@ async function entries(path: string, warnings: Set<string>, optional = false) {
 }
 
 async function liveSessions(root: string, warnings: Set<string>) {
-  const live = new Set<string>();
+  const owners = new Map<number, string | undefined>();
   const dir = join(root, "sessions");
   for (const file of await entries(dir, warnings, true)) {
     if (!file.isFile() || !/^\d+(?:\.json)?$/.test(file.name)) continue;
@@ -38,28 +36,14 @@ async function liveSessions(root: string, warnings: Set<string>) {
         continue;
       const id = identifier(record.sessionId);
       if (!id) continue;
-      try {
-        process.kill(pid, 0);
-      } catch (err) {
-        if ((err as NodeJS.ErrnoException).code !== "EPERM") continue;
+      if (await ownsSession("claude", { ...record, pid })) {
+        owners.set(pid, owners.has(pid) && owners.get(pid) !== id ? undefined : id);
       }
-      // Recent registries record the OS process start, so a recycled PID can be rejected.
-      if (typeof record.procStart === "string" || Number.isFinite(record.startedAt)) {
-        const { stdout } = await ps("ps", ["-o", "lstart=", "-p", String(pid)], {
-          env: { ...process.env, LC_ALL: "C", TZ: "UTC" },
-          timeout: 1500,
-        });
-        const start = stdout.trim();
-        if (typeof record.procStart === "string" && start !== record.procStart) continue;
-        if (Number.isFinite(record.startedAt) && Date.parse(start + " UTC") > record.startedAt)
-          continue;
-      }
-      live.add(id);
     } catch {
       warnings.add("Some Claude Code process registry entries could not be read.");
     }
   }
-  return live;
+  return new Set(owners.values());
 }
 
 // Keep tool IDs scoped to the transcript. Subagents can execute independently of their parent.
@@ -186,7 +170,6 @@ export async function claudeSessions(
   const projects = join(root, "projects");
   const warnings = new Set<string>();
   const sessions = new Map<string, ReportSession>();
-  const live = await liveSessions(root, warnings);
   async function collect(path: string, id: string) {
     const history = await read(path, id, async () => {
       const notices = new Set<string>();
@@ -200,7 +183,6 @@ export async function claudeSessions(
     for (const warning of history.warnings) warnings.add(warning);
     const found = history.sessions[0];
     if (!found) return;
-    if (live.has(found.id)) found.live = true;
     const previous = sessions.get(found.id);
     if (!previous) sessions.set(found.id, found);
     else {
@@ -228,7 +210,11 @@ export async function claudeSessions(
       else if (entry.isDirectory()) await agents(join(path, "subagents"), entry.name, true);
     }
   }
-  for (const session of sessions.values()) session.tools.sort((a, b) => a.at.localeCompare(b.at));
+  const live = await liveSessions(root, warnings);
+  for (const session of sessions.values()) {
+    if (live.has(session.id)) session.live = true;
+    session.tools.sort((a, b) => a.at.localeCompare(b.at));
+  }
   return {
     sessions: [...sessions.values()].sort((a, b) => b.lastActivity.localeCompare(a.lastActivity)),
     warnings: [...warnings],

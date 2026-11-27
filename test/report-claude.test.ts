@@ -27,7 +27,7 @@ const row = (n: number, type: string, content: unknown, modelId = model, id = St
     message: { model: modelId, content, id },
   });
 
-test("discovers legacy live sessions across projects and pairs main and agent tools independently", async () => {
+test("rejects an unrelated live PID across projects and pairs main and agent tools independently", async () => {
   const root = await mkdtemp(join(tmpdir(), "cl-history-"));
   const previous = process.env.CLAUDE_CONFIG_DIR;
   process.env.CLAUDE_CONFIG_DIR = root;
@@ -79,9 +79,9 @@ test("discovers legacy live sessions across projects and pairs main and agent to
       id: "old-session",
       project: "second",
       lastActivity: at(8),
-      live: true,
       model,
     });
+    expect(session.live).toBeUndefined();
     const tools = Object.fromEntries(session.tools.map((t) => [t.name, t]));
     expect(Object.keys(tools).sort()).toEqual([
       "AgentTool",

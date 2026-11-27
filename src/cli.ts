@@ -1,7 +1,6 @@
 #!/usr/bin/env bun
 import { homedir } from "node:os";
 import { completionWords, nextWords } from "./completion.ts";
-import { report } from "./report.ts";
 import { liteHome } from "./home.ts";
 import { COMMAND_HELP, USAGE } from "./help.ts";
 import {
@@ -77,6 +76,7 @@ const ARGUMENT_COMMANDS: Record<"ollama" | "mlx" | "serve" | "bench" | "report",
         console.error(COMMAND_HELP.report);
         return 2;
       }
+      const { report } = await import("./report.ts");
       return report(
         process.env.HOME ?? homedir(),
         home,

@@ -1,6 +1,8 @@
 import { afterEach, expect, test } from "bun:test";
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { startClient } from "./report-process-fixture.ts";
+import { ReportCache } from "../src/report-cache.ts";
+import { hostname, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { qwenSessions } from "../src/report-qwen.ts";
 
@@ -96,7 +98,6 @@ test("reads across projects, correlates arbitrary tool names and keeps only loca
     project: "demo",
     client: "Qwen Code",
     model: "local",
-    live: true,
     lastActivity: timestamp(5),
     tools: [
       { name: "mcp__custom", at: timestamp(1), continued: true },
@@ -147,4 +148,61 @@ test("rejects a recycled registry PID and prefers the subagent's own model", asy
   expect(sessions.map((s) => s.id).sort()).toEqual(["agent-own", "parent"]);
   expect(sessions.some((s) => s.live)).toBe(false);
   expect(warnings).toEqual([]);
+});
+
+test("validates runtime ownership and shared-process registry slots on every capture", async () => {
+  const dir = await home();
+  const child = await startClient(dir, "qwen");
+  const cache = new ReportCache();
+  const live = async () =>
+    (await qwenSessions(dir, models, cache)).sessions
+      .filter((s) => s.live)
+      .map((s) => s.id)
+      .sort();
+  const runtime = (id: string, overrides = {}) =>
+    file(
+      dir,
+      "projects/a/chats/" + id + ".runtime.json",
+      JSON.stringify({
+        pid: child.pid,
+        session_id: id,
+        hostname: hostname(),
+        started_at: Date.now() / 1000,
+        ...overrides,
+      }),
+    );
+  try {
+    for (const id of ["old", "shared", "own"])
+      await file(dir, "projects/a/chats/" + id + ".jsonl", lines(assistant(1, "local")));
+    for (const invalid of [
+      { hostname: "another.invalid" },
+      { started_at: 1 },
+      { started_at: Date.now() },
+      { proc_start: "wrong" },
+      { pid_ns: -1 },
+      { session_id: "shared" },
+    ]) {
+      await runtime("old", invalid);
+      expect(await live()).toEqual([]);
+    }
+    await runtime("old");
+    expect(await live()).toEqual(["old"]);
+    await runtime("shared");
+    expect(await live()).toEqual([]);
+    for (const [id, suffix] of [
+      ["own", "-abcd1234"],
+      ["shared", ""],
+    ]) {
+      await file(
+        dir,
+        "sessions/" + child.pid + suffix + ".json",
+        JSON.stringify({ pid: child.pid, sessionId: id, startedAt: Date.now() }),
+      );
+    }
+    expect(await live()).toEqual(["own", "shared"]);
+  } finally {
+    child.kill();
+    await child.exited;
+  }
+  expect(await live()).toEqual([]);
 });

@@ -180,7 +180,9 @@ Press Ctrl-C to close the monitor and save the latest captured report at `~/.cac
 
 Use `cl report --all-models` to include every model recorded by Claude Code, Qwen Code and OpenCode v2, including older aliases and cloud-backed sessions stored on this Mac. The default view matches local model names from the launcher or running servers and recognized local OpenCode providers.
 
-Expand a session to see flagged calls, their timestamps, and recent successful calls. The report flags explicit errors, calls without a recorded result, and successful calls that took at least 60 seconds to return. That interval can include permission prompts and hooks. A missing result can also come from an interrupted session. A live badge requires evidence from the client.
+Expand a session to see flagged calls, their timestamps, and recent successful calls. The report flags explicit errors, calls without a recorded result, and successful calls that took at least 60 seconds to return. That interval can include permission prompts and hooks. A missing result can also come from an interrupted session.
+
+**Streaming** describes the dashboard connection. **Live** beside a session means the latest capture matched its client registration to a running process. If updates stop, the badge changes to **Last seen live**. A saved report uses **Live at capture**. OpenCode history supplies tool activity but has no process registration for this check.
 
 The report includes tool names, session identifiers, project names and timings. It omits prompts, tool arguments and result bodies. The oMLX activity counters cover the whole server and update as requests finish.
 

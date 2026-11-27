@@ -8,6 +8,7 @@ TypeScript + Bun: Ollama launcher, bench, server checks and installer. See READM
 - `bun run lint`: oxlint plus `oxfmt --check`; `bun run format` writes fixes
 - `bun run typecheck`: `tsc`
 - `bun run build`: compiles `src/cli.ts` to `dist/claude-lite`
+- Run `bun run report:styles` after changing shadcn utility classes or theme tokens in `src/report-ui/`. The generated CSS is tracked so offline reports and the compiled CLI carry their own styles.
 - `scripts/bench-variants.sh [size] [runs]`: benches baseline, temperature 0.4 and 32k-context overlays of a size, then restores `config/local-sizes.json`
 - `scripts/t3-code-setup.sh`: copies `config/t3-code-27b.json` to `~/.claude_local/settings.json` and prints the T3 Code provider values; refuses to replace a different file
 
