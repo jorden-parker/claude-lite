@@ -13,7 +13,7 @@ TypeScript + Bun: Ollama launcher, bench, server checks and installer. See READM
 
 ## Architecture
 
-- `src/cli.ts`: entry point and subcommand dispatch (`install`, `update`, `build`, `uninstall`, `doctor`, `logs`, `servers`, `stop`, `fix-servers`, `config`, `list`, `ollama`, `mlx`, `serve`, `bench`)
+- `src/cli.ts`: entry point and subcommand dispatch (`install`, `update`, `build`, `uninstall`, `doctor`, `report`, `logs`, `servers`, `stop`, `fix-servers`, `config`, `list`, `ollama`, `mlx`, `serve`, `bench`)
 - `src/install.ts`: lifecycle commands, shell completion blocks, the `cl` link, Ollama server checks and the server env login agent
 - `src/help.ts`: `COMMAND_HELP`/`USAGE`; `src/completion.ts`: shell completion; `src/home.ts`: `liteHome()` (`CLAUDE_LITE_HOME` or the checkout)
 - `src/config-screen.ts`: `cl config`; pure `renderConfig`/`pressKey` over a `ConfigState`, plus `loadConfigState`/`saveConfigState` and the raw-terminal loop `runConfigScreen`. Writes `local-ollama.json` (`sandbox.enabled`, `permissions.defaultMode`) and `local-sizes.json` (`default`, and per size `thinking`, `effort`, `output_tokens`, `qwen`/`opencode`); the system prompt row opens `system-prompt.md` in `$VISUAL`/`$EDITOR`; a size with `"default": true` wins in `defaultSize`

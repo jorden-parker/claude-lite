@@ -12,6 +12,8 @@ export const COMMAND_HELP = {
   update: "usage: claude-lite update\n  git pull --ff-only, bun install, build, then install",
   uninstall:
     "usage: claude-lite uninstall\n  removes what install added and the server env login agent that cl servers writes",
+  report:
+    "usage: claude-lite report\n  captures local oMLX status and Read timings for the current Claude project, then opens an offline HTML report in an interactive macOS terminal",
   doctor:
     "usage: claude-lite doctor\n  checks the build, shell completion, the cl link, config files, that Ollama responds with one startup source and the server env, and prints the Ollama sandbox and permission mode",
   logs: "usage: claude-lite logs\n  follows the local Ollama and cl mlx server logs, including files created after the command starts",

@@ -12,6 +12,7 @@ import {
   unlinkSync,
   writeFileSync,
 } from "node:fs";
+import { collectReport, reportLines } from "./report-data.ts";
 import { totalmem } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { completionPath, completionScript, END, type Shell, START } from "./completion.ts";
@@ -254,6 +255,7 @@ export async function doctor(
     console.log(
       `oMLX stored no prompt cache; skipped by: ${mlxHealth.cacheSkipReasons.join(", ")} (see ${mlxLogFile}; known issue jundot/omlx#3317)`,
     );
+  for (const line of reportLines(await collectReport(userHome, home))) console.log(line);
   for (const line of securityPosture(home)) console.log(line);
   return checks.every(([, ok]) => ok) ? 0 : 1;
 }

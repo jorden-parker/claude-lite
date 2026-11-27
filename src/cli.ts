@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 import { homedir } from "node:os";
 import { completionWords, nextWords } from "./completion.ts";
+import { report } from "./report.ts";
 import { liteHome } from "./home.ts";
 import { COMMAND_HELP, USAGE } from "./help.ts";
 import {
@@ -24,6 +25,7 @@ const LIFECYCLE: Record<
   Exclude<keyof typeof COMMAND_HELP, "ollama" | "mlx" | "serve" | "bench">,
   (userHome: string, home: string) => Promise<number>
 > = {
+  report,
   install,
   uninstall,
   update,
@@ -50,7 +52,7 @@ async function runLifecycle(name: keyof typeof LIFECYCLE, extraArgs: string[], h
     return 2;
   }
   const code = await LIFECYCLE[name](process.env.HOME ?? homedir(), home);
-  if (name === "config" || name === "list") return code;
+  if (name === "config" || name === "list" || name === "report") return code;
   console.log(
     code === 0 ? `claude-lite: ${name} done` : `claude-lite: ${name} failed (exit ${code})`,
   );
